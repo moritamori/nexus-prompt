@@ -37,7 +37,7 @@
         border: "none"
       },
       // プレースホルダーのスタイル（Decoration.mark用）
-      ".cm-input-draggable": {
+      ".cm-placeholder-draggable": {
         cursor: "pointer !important",
         backgroundColor: "#f0f0f0",
         borderRadius: "3px",
@@ -51,11 +51,11 @@
         WebkitUserDrag: "element",  // macOS Safariでのドラッグサポート
         pointerEvents: "auto !important"  // ポインターイベントを確実に受け取る
       },
-      ".cm-input-draggable:hover": {
+      ".cm-placeholder-draggable:hover": {
         backgroundColor: "#e0e0e0",
         boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
       },
-      ".cm-input-draggable.cm-dragging": {
+      ".cm-placeholder-draggable.cm-dragging": {
         opacity: "0.5"
       },
       // Hide autocomplete tooltip suggestions
