@@ -5,6 +5,7 @@
   import { keymap } from '@codemirror/view'
   import { defaultKeymap, historyKeymap } from '@codemirror/commands'
   import { searchKeymap } from '@codemirror/search'
+  import { inputPlugin } from './plugins/input-plugin'
 
   let editorElement: HTMLElement | null = null;
   let view: EditorView | null = null;
@@ -173,6 +174,7 @@
           ...searchKeymap,
         ]),
         editorTheme(),
+        inputPlugin,
         createDomEventHandlers(),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
