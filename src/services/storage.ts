@@ -70,7 +70,7 @@ export class StorageService {
         }],
         settings: {
           defaultFrameworkId: frameworkId,
-          version: '1.2.0' // TODO: manifest.jsonから動的に取得する
+          version: '1.2.1' // TODO: manifest.jsonから動的に取得する
         }
       };
       await this.saveAppData(defaultData);

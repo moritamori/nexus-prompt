@@ -170,20 +170,6 @@
   function backToListHandler(): void {
     backToList();
   }
-  const items = ['{{target_text}}', '{{user_name}}', '{{date}}']
-  let editorRef: any
-
-  function handleDragStart(event: DragEvent, text: string) {
-    event.dataTransfer?.setData('text/plain', text)
-  }
-
-  function handlePaletteClick(text: string) {
-    try {
-      editorRef?.insertTextAtCursor?.(text)
-    } catch (e) {
-      console.warn('palette click insert failed', e)
-    }
-  }
 </script>
 
 <div class="edit-prompt">

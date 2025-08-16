@@ -1,6 +1,6 @@
 {
   "name": "nexus-prompt",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "LLMプロンプト改善支援Chrome拡張",
   "type": "module",
   "scripts": {
@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.57.0",
+    "@codemirror/lang-javascript": "^6.2.4",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.38.1",
     "@tailwindcss/postcss": "^4.1.11",

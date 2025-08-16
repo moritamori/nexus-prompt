@@ -5,7 +5,7 @@
   import { keymap } from '@codemirror/view'
   import { defaultKeymap, historyKeymap } from '@codemirror/commands'
   import { searchKeymap } from '@codemirror/search'
-  import { inputPlugin } from './plugins/inputPlugin'
+  import { inputPlugin } from './plugins/input-plugin'
 
   let editorElement: HTMLElement | null = null;
   let view: EditorView | null = null;
@@ -38,7 +38,7 @@
         border: "none"
       },
       // プレースホルダーのスタイル（Decoration.mark用）
-      ".cm-placeholder-draggable": {
+      ".cm-input-draggable": {
         cursor: "pointer !important",
         backgroundColor: "#f0f0f0",
         borderRadius: "3px",
@@ -52,11 +52,11 @@
         WebkitUserDrag: "element",  // macOS Safariでのドラッグサポート
         pointerEvents: "auto !important"  // ポインターイベントを確実に受け取る
       },
-      ".cm-placeholder-draggable:hover": {
+      ".cm-input-draggable:hover": {
         backgroundColor: "#e0e0e0",
         boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
       },
-      ".cm-placeholder-draggable.cm-dragging": {
+      ".cm-input-draggable.cm-dragging": {
         opacity: "0.5"
       },
       // Hide autocomplete tooltip suggestions
@@ -93,10 +93,10 @@
         const dt = event.dataTransfer
         if (!dt) return false
         const types = Array.from(dt.types || [])
-        const isKnown = types.includes('text/plain') || types.includes('application/x-codemirror-placeholder')
+        const isKnown = types.includes('text/plain') || types.includes('application/x-codemirror-input')
         if (isKnown) {
           event.preventDefault()
-          dt.dropEffect = types.includes('application/x-codemirror-placeholder') ? 'move' : 'copy'
+          dt.dropEffect = types.includes('application/x-codemirror-input') ? 'move' : 'copy'
           return true
         }
         return false
@@ -113,7 +113,7 @@
               return
             }
             const types = Array.from(dt.types || [])
-            const isKnown = types.includes('text/plain') || types.includes('application/x-codemirror-placeholder')
+            const isKnown = types.includes('text/plain') || types.includes('application/x-codemirror-input')
             if (!isKnown) {
               console.warn('[Editor] drop: unknown type', types)
               return
@@ -128,57 +128,10 @@
               clientY: event.clientY
             })
             const text = dt.getData('text/plain') || ''
-            const placeholderData = types.includes('application/x-codemirror-placeholder') ? dt.getData('application/x-codemirror-placeholder') : ''
             const dropPos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head
-            console.debug('[Editor] drop:pos', { dropPos, text, placeholderData })
-            if (placeholderData) {
-              let parseError = false
-              try {
-                const parsed = JSON.parse(placeholderData)
-                const from = parsed.from
-                const to = parsed.to
-                console.debug('[Editor] drop:move', { from, to, dropPos })
-                if (dropPos <= from || dropPos >= to) {
-                  const doc = view.state.doc
-                  const movedText = doc.sliceString(from, to)
-                  const currentContent = doc.toString()
-                  let before, middle, after
-                  if (dropPos < from) {
-                    before = currentContent.slice(0, dropPos)
-                    middle = currentContent.slice(dropPos, from)
-                    after = currentContent.slice(to)
-                    const newContent = before + movedText + middle + after
-                    const newCursorPos = dropPos + movedText.length
-                    view.dispatch({
-                      changes: { from: 0, to: currentContent.length, insert: newContent },
-                      selection: { anchor: newCursorPos }
-                    })
-                  } else {
-                    before = currentContent.slice(0, from)
-                    middle = currentContent.slice(to, dropPos)
-                    after = currentContent.slice(dropPos)
-                    const newContent = before + middle + movedText + after
-                    const newCursorPos = dropPos - (to - from) + movedText.length
-                    view.dispatch({
-                      changes: { from: 0, to: currentContent.length, insert: newContent },
-                      selection: { anchor: newCursorPos }
-                    })
-                  }
-                  console.debug('[Editor] drop:move completed')
-                } else {
-                  console.debug('[Editor] drop:move ignored (drop within same placeholder)')
-                }
-              } catch (e) {
-                parseError = true
-                console.warn('[Editor] drop:placeholder parse error', e)
-              }
-              if (parseError && text) {
-                console.debug('[Editor] drop:dispatch insert after parse error', { from: dropPos, insert: text })
-                view.dispatch({ changes: { from: dropPos, to: dropPos, insert: text } })
-              }
-            } else if (text) {
-              console.debug('[Editor] drop:dispatch insert', { from: dropPos, insert: text })
-              view.dispatch({ changes: { from: dropPos, to: dropPos, insert: text } })
+            console.debug('[Editor] drop:pos', { dropPos, text })
+            if (text) {
+              handleEditorTextInsert(view, dropPos, text)
             }
           } catch (e) {
             console.error('[Editor] Drop handling error (inner)', e)
