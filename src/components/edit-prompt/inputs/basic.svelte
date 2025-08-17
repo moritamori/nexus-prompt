@@ -16,7 +16,8 @@
   ondragend={onDragEndLocal((v) => isDragging = v)}
   data-type={type}
   data-key={key}
-  aria-label="差し込み({typeLabel})"
+  title="差し込み（{typeLabel}）をエディターに追加"
+  aria-label="差し込み（{typeLabel}）をエディターに追加"
   role="button"
   tabindex="0">
   {#if isDragging}

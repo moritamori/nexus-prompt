@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { Prompt } from '../../types';
-  // import { autosize } from '../actions/autosize';
+  import { onMount, onDestroy } from 'svelte';
   import PromptEditor from './prompt-editor.svelte';
   import { type PromptViewModel, createPromptViewModel, toPromptDsl, type PromptInputView } from '../../promptops/dsl/prompt/renderer';
+  import { validateTemplateInputsConsistency } from '../../promptops/dsl/prompt/linter';
   import { storageService } from '../../services/storage';
   import { showToast, entitlements } from '../../stores';
   import BasicInput from './inputs/basic.svelte';
@@ -20,26 +21,30 @@
   let isSaving = $state(false);
   let editorRef: PromptEditor | null = $state(null);
   let showInputModal = $state(false);
-  let initialInput: Partial<PromptInputView> | undefined = $state({name: "target_text", type: "string"});
+  let initialInput: Partial<PromptInputView> | undefined = $state({name: "target_string", type: "string", required: false});
   let editingIndex: number | null = $state(null);
+  let addedHistoryEntry = $state(false);
+  let popstateHandler: ((e: PopStateEvent) => void) | null = null;
+  let keydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // Constants
-  const MAX_PROMPT_CONTETNT_LENGTH = 10000;
+  const MAX_PROMPT_CONTENT_LENGTH = 10000;
   const MAX_PROMPT_NAME_LENGTH = 200;
   const MAX_PROMPT_COUNT = 20;
-  const inputTypes = [
+  const INPUT_TYPES = [
     { type: 'string' as const, typeLabel: 'テキスト' },
     { type: 'number' as const, typeLabel: '数値' },
     { type: 'boolean' as const, typeLabel: 'はい・いいえ' },
   ];
 
-  function openAddInputModal() {
+  function openAddInputModal(_e: MouseEvent, defaultInput?: Partial<PromptInputView>) {
     editingIndex = null;
-    initialInput = { name: 'target_text', type: 'string' };
+    initialInput = defaultInput ?? { name: 'target_string', type: 'string', required: false };
     showInputModal = true;
   }
 
   function cancelAddInput() {
+    editorRef?.deleteVarName?.(initialInput?.name ?? '');
     showInputModal = false;
     editingIndex = null;
     initialInput = undefined;
@@ -47,9 +52,21 @@
 
   function handleSaveInput(e: CustomEvent<PromptInputView>) {
     const data = e.detail;
-    if (!data?.name) {
+    const name = (data?.name ?? '').trim();
+    if (!name) {
       showToast('入力名を入力してください', 'error');
       return;
+    }
+    const inputs = promptViewModel.inputs ?? [];
+    const isDuplicate = inputs.some((inp, i) => inp.name === name && (editingIndex == null || i !== editingIndex));
+    if (isDuplicate) {
+      showToast('同じ入力名が既に存在します。別の名前を入力してください', 'error');
+      return;
+    }
+    const oldName = (initialInput?.name ?? '').trim();
+    data.name = name;
+    if (oldName && oldName !== name) {
+      editorRef?.replaceVarName?.(oldName, name);
     }
     if (editingIndex != null) {
       promptViewModel.inputs = (promptViewModel.inputs ?? []).map((inp, i) => (i === editingIndex ? data : inp));
@@ -61,9 +78,13 @@
     initialInput = undefined;
   }
 
-  function getTypeLabel(t: string): string {
-    const label = inputTypes.find((it) => it.type === t)?.typeLabel ?? t;
-    return label ? label.substring(0, 1) : '';
+  function getTypeLabel(t: string, short: boolean = false): string {
+    const label = INPUT_TYPES.find((it) => it.type === t)?.typeLabel ?? t;
+    return short ? label.substring(0, 1) : label;
+  }
+
+  function getInputChipTitle(inp: PromptInputView): string {
+    return `差し込み定義（${getTypeLabel(inp.type)}：${inp.name}）を編集`;
   }
 
   function onClickInputChip(index: number) {
@@ -86,6 +107,19 @@
     return null;
   }
 
+  // テンプレートと入力の整合チェック（保存前）
+  function validateTemplateAndInputsConsistency(): string | null {
+    const { missingInTemplate, missingInInputs } = validateTemplateInputsConsistency(
+      promptViewModel.template,
+      promptViewModel.inputs ?? []
+    );
+    if ((missingInTemplate.length + missingInInputs.length) > 0) {
+      const toText = (arr: string[]) => arr.length ? arr.join(', ') : '-';
+      return `プロンプト内容と差し込みの定義が一致しません。\nプロンプト内容に無い差し込み: ${toText(missingInTemplate)}\n差し込みに無いプロンプト内容の変数: ${toText(missingInInputs)}`;
+    }
+    return null;
+  }
+
   // Event handler, Props
   let { promptSelectionReset, backToList, promptId } = $props();
 
@@ -99,7 +133,7 @@
           promptViewModel = createPromptViewModel(p.content);
         } else {
           console.warn(`Prompt with id "${promptId}" not found. Navigating back to the list.`);
-          showToast('指定されたプロンプトが見つかりませんでした。', 'error');
+          showToast('指定されたプロンプトが見つかりませんでした。', 'error', 5000);
           backToList();
         }
       } else {
@@ -115,14 +149,58 @@
     })();
   });
 
+  onMount(() => {
+    try {
+      window.history.pushState({ view: 'edit-prompt' }, '');
+      addedHistoryEntry = true;
+    } catch {
+      // noop
+    }
+    popstateHandler = () => {
+      if (addedHistoryEntry) {
+        addedHistoryEntry = false;
+        backToList();
+      }
+    };
+    window.addEventListener('popstate', popstateHandler);
+
+    keydownHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || (e as any).keyCode === 27) {
+        if (showInputModal) return;
+        if (isSaving) return;
+        e.preventDefault();
+        backToListHandler();
+      }
+    };
+    window.addEventListener('keydown', keydownHandler);
+  });
+
+  onDestroy(() => {
+    if (popstateHandler) {
+      window.removeEventListener('popstate', popstateHandler);
+      popstateHandler = null;
+    }
+    if (keydownHandler) {
+      window.removeEventListener('keydown', keydownHandler);
+      keydownHandler = null;
+    }
+  });
+
   async function save(): Promise<void> {
     const validationError = validatePromptViewModel(
       promptViewModel,
       MAX_PROMPT_NAME_LENGTH,
-      MAX_PROMPT_CONTETNT_LENGTH
+      MAX_PROMPT_CONTENT_LENGTH
     );
     if (validationError) {
       showToast(validationError, 'error');
+      return;
+    }
+
+    // テンプレートと入力の整合チェック
+    const consistencyError = validateTemplateAndInputsConsistency();
+    if (consistencyError) {
+      showToast(consistencyError, 'error');
       return;
     }
 
@@ -168,7 +246,15 @@
   }
 
   function backToListHandler(): void {
-    backToList();
+    if (addedHistoryEntry) {
+      try {
+        window.history.back();
+      } catch {
+        backToList();
+      }
+    } else {
+      backToList();
+    }
   }
 </script>
 
@@ -189,45 +275,44 @@
   <div class="form-group">
     <div class="label-row">
       <label for="promptContent">プロンプト内容</label>
+      <input type="input" id="promptContent" class="hidden" />
       <button
         type="button"
         class="small-icon-button"
-        title="プロンプトを追加"
-        aria-label="プロンプトを追加"
+        title="差し込み定義を追加"
+        aria-label="差し込み定義を追加"
         data-testid="prompt-content-add-button"
         onclick={openAddInputModal}
       >＋</button>
       {#if (promptViewModel.inputs?.length ?? 0) > 0}
         <div class="input-chips">
           {#each promptViewModel.inputs as inp, i}
-            <button type="button" class="input-chip" onclick={() => onClickInputChip(i)}>
-              {getTypeLabel(inp.type)}
+            <button type="button" class="input-chip" onclick={() => onClickInputChip(i)} title={getInputChipTitle(inp)} aria-label={getInputChipTitle(inp)}>
+              {getTypeLabel(inp.type, true)}
             </button>
           {/each}
         </div>
       {/if}
     </div>
-    <!-- <textarea
-      id="promptContent"
-      data-testid="prompt-content-input"
-      use:autosize={{ maxRows: 15, minRows: 10 }}
-      bind:value={promptViewModel.template}
-      placeholder="LLMプロンプトを入力">
-    </textarea> -->
     <section class="inputs">
-      {#each inputTypes as type}
+      {#each INPUT_TYPES as type}
         <BasicInput editorRef={editorRef} type={type.type} typeLabel={type.typeLabel} />
       {/each}
     </section>
-    <PromptEditor bind:this={editorRef} bind:value={promptViewModel.template} />
+    <PromptEditor
+      bind:this={editorRef}
+      bind:value={promptViewModel.template}
+      bind:inputs={promptViewModel.inputs}
+      on:openAddInput={(e) => openAddInputModal(new MouseEvent('click'), { name: e.detail.name, type: e.detail.type as any })}
+    />
   </div>
 
   <div class="input-button-group">
-    <button id="savePrompt" class="primary-button" data-testid="save-prompt-button" onclick={save} disabled={isSaving}>
-      {isSaving ? '保存中...' : '保存'}
-    </button>
     <button id="cancelPrompt" class="secondary-button" data-testid="cancel-prompt-button" onclick={backToListHandler} disabled={isSaving}>
       キャンセル
+    </button>
+    <button id="savePrompt" class="primary-button" data-testid="save-prompt-button" onclick={save} disabled={isSaving}>
+      {isSaving ? '保存中...' : '保存'}
     </button>
   </div>
 </div>
@@ -235,11 +320,13 @@
 {#if showInputModal}
   <InputModal
     initial={initialInput}
-    inputTypes={inputTypes}
+    inputTypes={INPUT_TYPES}
+    inputs={promptViewModel.inputs}
     editing={editingIndex != null}
     on:save={handleSaveInput}
     on:cancel={cancelAddInput}
     on:delete={() => {
+      editorRef?.deleteVarName?.(initialInput?.name ?? '');
       if (editingIndex != null) {
         promptViewModel.inputs = (promptViewModel.inputs ?? []).filter((_, i) => i !== editingIndex);
       }

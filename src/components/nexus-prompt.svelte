@@ -190,4 +190,9 @@
   .tab-content.active {
     @apply block;
   }
+
+  /* Toast message: display \n as line breaks */
+  .message-area {
+    white-space: pre-line;
+  }
 </style>

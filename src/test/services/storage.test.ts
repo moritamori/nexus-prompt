@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi,  } from 'vitest';
 import type { AppData, Framework, Prompt, Provider } from '../../types';
 import { StorageService, STORAGE_KEY, SNAPSHOT_STORAGE_KEY } from '../../services/storage';
-import { createMockAppData, createMockFramework, createMockProvider, createMockPrompt, createMockSnapshotData } from '../utils/factories';
+import { createMockAppData, createMockFramework, createMockProvider, createMockPrompt, createMockSnapshotData } from '../test-utils/factories';
 
 // Chrome storage APIのモック
 const mockChromeStorage = {

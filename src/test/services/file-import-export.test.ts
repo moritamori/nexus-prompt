@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { FileImportExportService } from '../../services/file-import-export';
 import type { AppData, SnapshotData } from '../../types';
-import { createMockAppData, createMockFramework, createMockPrompt, createMockSnapshotData } from '../utils/factories';
+import { createMockAppData, createMockFramework, createMockPrompt, createMockSnapshotData } from '../test-utils/factories';
 import { readFile } from 'fs/promises';
 import JSZip from 'jszip';
 

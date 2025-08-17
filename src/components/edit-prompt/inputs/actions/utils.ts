@@ -1,6 +1,6 @@
 // src/lib/actions/palette.ts
 export type EditorRef = {
-    insertTextAtCursor?: (text: string) => void;
+    insertTextAtCursor?: (text: string, type: string) => void;
   } | undefined | null;
   
 
@@ -14,7 +14,14 @@ export function dragStart(node: HTMLElement, text: string) {
 
   function onDragStart(e: DragEvent) {
     if (!text) return;
+    // ドロップ側で type を認識できるよう、カスタム MIME に data-type を入れる
+    const type = node.getAttribute('data-type') ?? ''
     e.dataTransfer?.setData('text/plain', text);
+    if (type) {
+      try {
+        e.dataTransfer?.setData('application/x-codemirror-input', type)
+      } catch {}
+    }
   }
 
   node.addEventListener('dragstart', onDragStart);
@@ -42,11 +49,15 @@ export function clickDraggable(
   let { text, editorRef, insert } = params ?? {};
 
   function onClick() {
+    const type = node.getAttribute('data-type') ?? ''
+    if (!type) {
+      return;
+    }
     try {
       if (insert) {
         insert(text);
       } else {
-        editorRef?.insertTextAtCursor?.(text);
+        editorRef?.insertTextAtCursor?.(text, type);
       }
     } catch (e) {
       console.warn('palette click insert failed', e);
