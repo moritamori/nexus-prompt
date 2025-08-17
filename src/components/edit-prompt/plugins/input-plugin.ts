@@ -6,6 +6,9 @@ import type { DecorationSet } from '@codemirror/view'
 // プレースホルダーのパターン
 const inputPattern = /\{\{[^}]+\}\}/g
 
+// 内部（エディタ内）のドラッグ中フラグ（フォールバック抑止用）
+export let internalDragInProgress = false
+
 // プロンプトエディター内部でのドラッグ&ドロップを実現するためのプラグイン
 export class InputDraggablePlugin {
   public decorations: DecorationSet
@@ -118,6 +121,7 @@ export class InputDraggablePlugin {
                   }
 
                   isDragging = true
+                  internalDragInProgress = true
                   el.classList.add('cm-dragging')
 
                   const ghost = this.createGhostElement(input, getComputedStyle(el).fontFamily, 'fixed-follow')
@@ -168,6 +172,7 @@ export class InputDraggablePlugin {
                     isDragging = false
                     dragData = null
                     el.classList.remove('cm-dragging')
+                    internalDragInProgress = false
                     if (ghost && ghost.parentNode) {
                       ghost.parentNode.removeChild(ghost)
                     }
@@ -202,6 +207,7 @@ export class InputDraggablePlugin {
               this.prepareDataTransferWithGhost(event, el, input, from, to)
 
               el.classList.add('cm-dragging')
+              internalDragInProgress = true
               return
             }
           }
@@ -217,12 +223,14 @@ export class InputDraggablePlugin {
         this.prepareDataTransferWithGhost(event, el, input, from, to)
 
         el.classList.add('cm-dragging')
+        internalDragInProgress = true
       }
 
       el.addEventListener('dragstart', handleDragStart, true)
 
       el.addEventListener('dragend', () => {
         el.classList.remove('cm-dragging')
+        internalDragInProgress = false
       })
 
       el.addEventListener('click', (event: MouseEvent) => {
@@ -350,7 +358,8 @@ export class InputDraggablePlugin {
   private prepareDataTransferWithGhost(event: DragEvent, el: HTMLElement, input: string, from: number, to: number) {
     if (!event.dataTransfer) return
     event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('application/x-codemirror-input', JSON.stringify({ from, to }))
+    // 内部DnD識別用 MIME
+    event.dataTransfer.setData('application/x-codemirror-input-internal', JSON.stringify({ from, to }))
 
     const ghost = this.createGhostElement(input, getComputedStyle(el).fontFamily, 'offscreen')
     document.body.appendChild(ghost)
@@ -364,55 +373,58 @@ export class InputDraggablePlugin {
   // キーボードイベントを監視してDEL/BACKSPACEでのプレースホルダー削除を処理
   private setupKeyboardListener(view: EditorView) {
     const keydownHandler = (event: KeyboardEvent) => {
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        const selection = view.state.selection.main
-        const doc = view.state.doc.toString()
-        
-        // プレースホルダーパターンを検索して、削除対象がプレースホルダー内かどうかチェック
-        inputPattern.lastIndex = 0
-        let match: RegExpExecArray | null
-        while ((match = inputPattern.exec(doc)) !== null) {
-          const placeholderStart = match.index
-          const placeholderEnd = match.index + match[0].length
-          
-          let shouldDeletePlaceholder = false
-          
-          if (event.key === 'Delete') {
-            // DELキー: カーソル位置からプレースホルダー内部への削除
-            if (selection.from >= placeholderStart && selection.from < placeholderEnd) {
-              shouldDeletePlaceholder = true
-            }
-          } else if (event.key === 'Backspace') {
-            // BACKSPACEキー: カーソル位置がプレースホルダー内部または直後
-            if (selection.from > placeholderStart && selection.from <= placeholderEnd) {
-              shouldDeletePlaceholder = true
-            }
-          }
-          
-          if (shouldDeletePlaceholder) {
-            event.preventDefault()
-            event.stopPropagation()
-            
-            // プレースホルダー全体を削除
-            view.dispatch({
-              changes: { from: placeholderStart, to: placeholderEnd, insert: '' },
-              selection: { anchor: placeholderStart }
-            })
-            // 親（Svelte 側）へ削除通知イベントを発火
-            try {
-              if (!match[0]) return
-              const name = match[0].replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, '').trim()
-              const ev = new CustomEvent('cm-input-delete', {
-                detail: { name },
-              })
-              view.dom.dispatchEvent(ev)
-            } catch (_) {
-              // noop
-            }
-            
-            return
-          }
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return
+
+      const selection = view.state.selection.main
+      const pos = selection.from
+
+      // 可視範囲に構築されたDecorationから、カーソル付近のプレースホルダーのみを探索
+      let target: { from: number; to: number } = { from: 0, to: 0 }
+      // between は半開区間に注意。近傍1文字を含めて走査
+      this.decorations.between(Math.max(0, pos - 1), pos + 1, (from, to, _dec) => {
+        if (pos >= from && pos <= to) {
+          target = { from, to }
         }
+      })
+
+      if (target.from === 0 && target.to === 0) return
+
+      const placeholderStart = target.from
+      const placeholderEnd = target.to
+
+      let shouldDeletePlaceholder = false
+      if (event.key === 'Delete') {
+        // DEL: カーソル位置がプレースホルダー内
+        if (pos >= placeholderStart && pos < placeholderEnd) shouldDeletePlaceholder = true
+      } else {
+        // Backspace: カーソル位置がプレースホルダー内または直後
+        if (pos > placeholderStart && pos <= placeholderEnd) shouldDeletePlaceholder = true
+      }
+
+      if (!shouldDeletePlaceholder) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      // プレースホルダー全体を削除し、カーソルを先頭へ
+      const deletedText = view.state.doc.sliceString(placeholderStart, placeholderEnd)
+      view.dispatch({
+        changes: { from: placeholderStart, to: placeholderEnd, insert: '' },
+        selection: { anchor: placeholderStart }
+      })
+
+      // 親（Svelte 側）へ削除通知イベントを発火
+      try {
+        const name = (deletedText || '')
+          .replace(/^\{\{\s*/, '')
+          .replace(/\s*\}\}$/, '')
+          .trim()
+        if (name) {
+          const ev = new CustomEvent('cm-input-delete', { detail: { name } })
+          view.dom.dispatchEvent(ev)
+        }
+      } catch (_) {
+        // noop
       }
     }
     
