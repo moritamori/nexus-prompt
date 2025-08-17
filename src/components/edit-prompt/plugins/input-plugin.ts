@@ -16,14 +16,11 @@ export class InputDraggablePlugin {
     this.decorations = this.buildDecorations(view)
     this.setupDraggableObserver(view)
     this.makeDraggable(view)
+    this.setupKeyboardListener(view)
   }
 
   update(update: ViewUpdate) {
     if (update.docChanged || update.viewportChanged) {
-      console.debug('[InputDraggablePlugin] update triggered', {
-        docChanged: update.docChanged,
-        viewportChanged: update.viewportChanged
-      })
       this.decorations = this.buildDecorations(update.view)
       this.makeDraggable(update.view)
     }
@@ -43,7 +40,6 @@ export class InputDraggablePlugin {
           const target = mutation.target as HTMLElement
           if (target.classList && target.classList.contains('cm-input-draggable')) {
             if ((target as any).draggable === false) {
-              console.log('[InputDraggablePlugin] draggable was set to false, restoring')
               ;(target as any).draggable = true
             }
           }
@@ -87,11 +83,8 @@ export class InputDraggablePlugin {
       ;(el.style as any).MozUserSelect = 'none'
       ;(el.style as any).msUserSelect = 'none'
       ;(el.style as any).WebkitUserDrag = 'element'
-      ;(el.style as any).userModify = 'read-only'
-      ;(el.style as any).WebkitUserModify = 'read-only'
 
       el.setAttribute('data-drag-setup', 'true')
-      el.setAttribute('contenteditable', 'false')
 
       const editorView = view || this.view
 
@@ -101,7 +94,6 @@ export class InputDraggablePlugin {
       el.addEventListener(
         'mousedown',
         (event: MouseEvent) => {
-          console.log('[InputDraggablePlugin] mousedown on element', el.textContent)
           if (!event.shiftKey) {
             event.preventDefault()
             event.stopPropagation()
@@ -194,8 +186,6 @@ export class InputDraggablePlugin {
       )
 
       const handleDragStart = (event: DragEvent) => {
-        console.log('[InputDraggablePlugin] dragstart fired directly', el.textContent)
-
         const input = el.textContent || ''
         const editorView = view || this.view
 
@@ -209,8 +199,6 @@ export class InputDraggablePlugin {
               const from = inputIndex
               const to = from + input.length
 
-              console.log('[InputDraggablePlugin] calculated position', { from, to, input })
-
               this.prepareDataTransferWithGhost(event, el, input, from, to)
 
               el.classList.add('cm-dragging')
@@ -223,7 +211,6 @@ export class InputDraggablePlugin {
         const to = parseInt(el.getAttribute('data-to') || 'NaN')
 
         if (!input || Number.isNaN(from) || Number.isNaN(to)) {
-          console.warn('[InputDraggablePlugin] invalid drag data', { input, from, to })
           return
         }
 
@@ -235,12 +222,10 @@ export class InputDraggablePlugin {
       el.addEventListener('dragstart', handleDragStart, true)
 
       el.addEventListener('dragend', () => {
-        console.log('[InputDraggablePlugin] dragend fired directly')
         el.classList.remove('cm-dragging')
       })
 
       el.addEventListener('click', (event: MouseEvent) => {
-        console.log('[InputDraggablePlugin] click fired directly')
         event.preventDefault()
         event.stopPropagation()
 
@@ -281,8 +266,6 @@ export class InputDraggablePlugin {
         },
         true
       )
-
-      console.debug('[InputDraggablePlugin] setup draggable element', el.textContent)
     }
   }
 
@@ -325,8 +308,6 @@ export class InputDraggablePlugin {
     }
 
     const deco = builder.finish()
-    console.debug('[InputDraggablePlugin] buildDecorations:end', { count })
-
     // Ensure newly created elements get drag behavior
     window.setTimeout(() => {
       const inputs = view.dom.querySelectorAll('.cm-input-draggable')
@@ -380,11 +361,80 @@ export class InputDraggablePlugin {
     }
   }
 
+  // キーボードイベントを監視してDEL/BACKSPACEでのプレースホルダー削除を処理
+  private setupKeyboardListener(view: EditorView) {
+    const keydownHandler = (event: KeyboardEvent) => {
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        const selection = view.state.selection.main
+        const doc = view.state.doc.toString()
+        
+        // プレースホルダーパターンを検索して、削除対象がプレースホルダー内かどうかチェック
+        inputPattern.lastIndex = 0
+        let match: RegExpExecArray | null
+        while ((match = inputPattern.exec(doc)) !== null) {
+          const placeholderStart = match.index
+          const placeholderEnd = match.index + match[0].length
+          
+          let shouldDeletePlaceholder = false
+          
+          if (event.key === 'Delete') {
+            // DELキー: カーソル位置からプレースホルダー内部への削除
+            if (selection.from >= placeholderStart && selection.from < placeholderEnd) {
+              shouldDeletePlaceholder = true
+            }
+          } else if (event.key === 'Backspace') {
+            // BACKSPACEキー: カーソル位置がプレースホルダー内部または直後
+            if (selection.from > placeholderStart && selection.from <= placeholderEnd) {
+              shouldDeletePlaceholder = true
+            }
+          }
+          
+          if (shouldDeletePlaceholder) {
+            event.preventDefault()
+            event.stopPropagation()
+            
+            // プレースホルダー全体を削除
+            view.dispatch({
+              changes: { from: placeholderStart, to: placeholderEnd, insert: '' },
+              selection: { anchor: placeholderStart }
+            })
+            // 親（Svelte 側）へ削除通知イベントを発火
+            try {
+              if (!match[0]) return
+              const name = match[0].replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, '').trim()
+              const ev = new CustomEvent('cm-input-delete', {
+                detail: { name },
+              })
+              view.dom.dispatchEvent(ev)
+            } catch (_) {
+              // noop
+            }
+            
+            return
+          }
+        }
+      }
+    }
+    
+    view.dom.addEventListener('keydown', keydownHandler, true)
+    
+    // クリーンアップのために参照を保存
+    if (!this.view) {
+      this.view = view
+    }
+    ;(this.view as any)._keydownHandler = keydownHandler
+  }
+
   destroy() {
     if (this.observer) {
       this.observer.disconnect()
       this.observer = null
-      console.debug('[InputDraggablePlugin] observer disconnected')
+    }
+    
+    // キーボードイベントリスナーをクリーンアップ
+    if (this.view && (this.view as any)._keydownHandler) {
+      this.view.dom.removeEventListener('keydown', (this.view as any)._keydownHandler, true)
+      delete (this.view as any)._keydownHandler
     }
   }
 }
