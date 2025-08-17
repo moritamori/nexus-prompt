@@ -18,7 +18,7 @@
   }
   let type = $state<PromptInputType>((initial?.type as PromptInputType) ?? 'string');
   let name = $state(rename(initial?.name ?? 'target_string', inputs ?? [], editing));
-  let required = $state<string>(String(initial?.required) ?? 'false');
+  let required = $state<string>(initial?.required === true ? 'true' : 'false');
   let description = $state<string>(initial?.description ?? '');
   let ref = $state<string>(initial?.ref ?? '');
   let defaultRaw = $state<string>(String(initial?.defaultValue ?? ''));
@@ -121,32 +121,10 @@
   }
 
   onMount(() => {
-    // オーバーレイがフォーカスを奪わないよう、モーダル本体に初期フォーカス
+    // モーダルが開いたら、モーダル自体にフォーカスを当てる
     try {
       modalEl?.focus?.();
     } catch {}
-    
-    // モーダル表示中はエディタへのキーイベント伝播を完全にブロック
-    const blockKeyEvents = (e: KeyboardEvent) => {
-      // モーダル内部で発生したキーイベントは許可し、それ以外はブロック
-      const target = e.target as Node | null;
-      if (modalEl && target && modalEl.contains(target)) {
-        return;
-      }
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    };
-    
-    // window全体でキーイベントをキャプチャしてブロック
-    window.addEventListener('keydown', blockKeyEvents, true);
-    window.addEventListener('keyup', blockKeyEvents, true);
-    window.addEventListener('keypress', blockKeyEvents, true);
-    
-    return () => {
-      window.removeEventListener('keydown', blockKeyEvents, true);
-      window.removeEventListener('keyup', blockKeyEvents, true);
-      window.removeEventListener('keypress', blockKeyEvents, true);
-    };
   });
 </script>
 

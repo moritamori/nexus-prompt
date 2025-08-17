@@ -31,7 +31,7 @@
         fontSize: "14px"
       },
       ".cm-scroller": {
-        overflow: "auto;",
+        overflow: "auto",
         fontFamily: "'Fira Code', 'Consolas', 'Monaco', monospace"
       },
       ".cm-content": {
@@ -45,7 +45,7 @@
       ".cm-focused .cm-selectionBackground, ::selection": {
         backgroundColor: "#ff3e0030"
       },
-      ".cm-gutters.cm-gutters-before": {
+      ".cm-gutters": {
         minHeight: "300px !important",
         backgroundColor: "#f5f5f5",
         color: "#999",
@@ -223,9 +223,9 @@
     view.dom.addEventListener('cm-input-open', handleCmInputOpen as EventListener)
     view.contentDOM.addEventListener('cm-input-open', handleCmInputOpen as EventListener)
 
-    const handleCmInputDelete = (_event: Event) => {
+    const handleCmInputDelete = (ev: Event) => {
       try {
-        const anyEvent = event as unknown as CustomEvent<{ name: string }>
+        const anyEvent = ev as unknown as CustomEvent<{ name: string }>
         const name = anyEvent?.detail?.name
         if (!name) return
         const idx = Array.isArray(inputs) ? inputs.findIndex(i => (i?.name ?? '').trim() === name) : -1
