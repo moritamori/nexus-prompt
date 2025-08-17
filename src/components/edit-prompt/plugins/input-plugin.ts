@@ -256,6 +256,32 @@ export class InputDraggablePlugin {
         }
       })
 
+      // ダブルクリックで編集リクエストイベントを発火
+      el.addEventListener(
+        'dblclick',
+        (event: MouseEvent) => {
+          event.preventDefault()
+          event.stopPropagation()
+
+          const raw = el.textContent || ''
+          const name = raw.replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, '').trim()
+          if (!name) return
+
+          const editorView = view || this.view
+          if (editorView) {
+            const ev = new CustomEvent('cm-input-open', {
+              detail: { name },
+              bubbles: true,
+              composed: true
+            })
+
+            // スパン要素から発火してバブリングで editor の DOM へ到達させる
+            el.dispatchEvent(ev)
+          }
+        },
+        true
+      )
+
       console.debug('[InputDraggablePlugin] setup draggable element', el.textContent)
     }
   }
