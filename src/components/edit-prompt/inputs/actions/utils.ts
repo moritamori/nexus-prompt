@@ -60,7 +60,7 @@ export function clickDraggable(
         editorRef?.insertTextAtCursor?.(text, type);
       }
     } catch (e) {
-      console.warn('palette click insert failed', e);
+      // noop
     }
   }
 

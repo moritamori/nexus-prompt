@@ -44,7 +44,9 @@
   }
 
   function cancelAddInput() {
-    editorRef?.deleteVarName?.(initialInput?.name ?? '');
+    if (editingIndex == null && initialInput?.name) {
+      editorRef?.deleteVarName?.(initialInput.name);
+    }
     showInputModal = false;
     editingIndex = null;
     initialInput = undefined;
@@ -132,7 +134,6 @@
         if (p) {
           promptViewModel = createPromptViewModel(p.content);
         } else {
-          console.warn(`Prompt with id "${promptId}" not found. Navigating back to the list.`);
           showToast('指定されたプロンプトが見つかりませんでした。', 'error', 5000);
           backToList();
         }
@@ -238,7 +239,6 @@
       showToast('プロンプトを保存しました', 'success');
       backToList();
     } catch (e) {
-      console.error('プロンプト保存エラー:', e);
       showToast('プロンプトの保存に失敗しました', 'error');
     } finally {
       isSaving = false;
@@ -303,7 +303,8 @@
       bind:this={editorRef}
       bind:value={promptViewModel.template}
       bind:inputs={promptViewModel.inputs}
-      on:openAddInput={(e) => openAddInputModal(new MouseEvent('click'), { name: e.detail.name, type: e.detail.type as any })}
+      on:openAddInput={(e) => openAddInputModal(new MouseEvent('click'), { name: e.detail.name, type: e.detail.type as any, required: e.detail.required })}
+      on:openEditInputByIndex={(e) => onClickInputChip(e.detail.index)}
     />
   </div>
 
@@ -326,7 +327,9 @@
     on:save={handleSaveInput}
     on:cancel={cancelAddInput}
     on:delete={() => {
-      editorRef?.deleteVarName?.(initialInput?.name ?? '');
+      if (initialInput?.name) {
+        editorRef?.deleteVarName?.(initialInput.name);
+      }
       if (editingIndex != null) {
         promptViewModel.inputs = (promptViewModel.inputs ?? []).filter((_, i) => i !== editingIndex);
       }

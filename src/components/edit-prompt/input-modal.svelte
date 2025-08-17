@@ -72,12 +72,7 @@
     }
   }
 
-  function handleOverlayKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onCancel();
-    }
-  }
+  // キーボードでの閉じる動作は ESC のみを想定し、処理はモーダル側で行う
 
   // Prevent closing when mousedown starts inside the modal and mouseup ends on the overlay
   let overlayMouseDown = false;
@@ -117,11 +112,11 @@
   });
 
   function handleModalKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      // 入力中のEnterで保存。オーバーレイのkeydownへ泡上がらないようにする
+    if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      onSave();
+      e.stopImmediatePropagation();
+      onCancel();
     }
   }
 
@@ -130,10 +125,32 @@
     try {
       modalEl?.focus?.();
     } catch {}
+    
+    // モーダル表示中はエディタへのキーイベント伝播を完全にブロック
+    const blockKeyEvents = (e: KeyboardEvent) => {
+      // モーダル内部で発生したキーイベントは許可し、それ以外はブロック
+      const target = e.target as Node | null;
+      if (modalEl && target && modalEl.contains(target)) {
+        return;
+      }
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+    
+    // window全体でキーイベントをキャプチャしてブロック
+    window.addEventListener('keydown', blockKeyEvents, true);
+    window.addEventListener('keyup', blockKeyEvents, true);
+    window.addEventListener('keypress', blockKeyEvents, true);
+    
+    return () => {
+      window.removeEventListener('keydown', blockKeyEvents, true);
+      window.removeEventListener('keyup', blockKeyEvents, true);
+      window.removeEventListener('keypress', blockKeyEvents, true);
+    };
   });
 </script>
 
-<div class="modal-overlay" role="button" aria-label="閉じる" tabindex="0" onclick={handleOverlayClick} onkeydown={handleOverlayKeydown} onmousedown={handleOverlayMouseDown}>
+<div class="modal-overlay" role="presentation" onclick={handleOverlayClick} onmousedown={handleOverlayMouseDown}>
   <div bind:this={modalEl} class="modal" role="dialog" aria-modal="true" aria-labelledby="input-modal-title" tabindex="-1" onmousedown={handleModalMouseDown} onkeydown={handleModalKeydown}>
     <div class="modal-header">
       <div class="modal-title" id="input-modal-title">差し込み定義を{editing ? '編集' : '追加'}</div>
@@ -141,6 +158,7 @@
         <button class="delete-button" type="button" onclick={onDelete}>削除</button>
       {/if}
     </div>
+    <form class="modal-form" onsubmit={(e) => { e.preventDefault(); onSave(); }}>
     <div class="modal-body">
       <div class="form-group">
         <label class="field-label" for="input-type">タイプ</label>
@@ -152,11 +170,22 @@
       </div>
       <div class="form-group">
         <label class="field-label" for="input-name">名前</label>
-        <input type="text" bind:value={name} placeholder="入力名 (例: user_name)" id="input-name" />
+        <input
+          type="text"
+          id="input-name"
+          bind:value={name}
+          placeholder="入力名 (例: user_name)"
+          pattern="^[A-Za-z][A-Za-z0-9_\-]*$"
+          required
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          inputmode="none"
+        />
       </div>
       <div class="form-group">
         <label class="field-label" for="input-required">必須</label>
-        <select id="input-default" bind:value={required}>
+        <select id="input-required" bind:value={required}>
           <option value="true">はい</option>
           <option value="false">いいえ</option>
         </select>
@@ -183,8 +212,9 @@
     </div>
     <div class="modal-footer">
       <button class="secondary-button" type="button" onclick={onCancel}>キャンセル</button>
-      <button class="primary-button" type="button" onclick={onSave}>{editing ? '更新' : '追加'}</button>
+      <button class="primary-button" type="submit">{editing ? '更新' : '追加'}</button>
     </div>
+    </form>
   </div>
 </div>
 

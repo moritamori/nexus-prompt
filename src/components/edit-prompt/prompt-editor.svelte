@@ -11,9 +11,10 @@
 
   let editorElement: HTMLElement | null = null;
   let view: EditorView | null = null;
+  let cmInputOpenCleanup: (() => void) | null = null;
   export let value: string;
   export let inputs: PromptInputView[];
-  const dispatch = createEventDispatcher<{ input: string; change: string; openAddInput: { name: string; type: string } }>()
+  const dispatch = createEventDispatcher<{ input: string; change: string; openAddInput: { name: string; type: string, required: boolean }; openEditInputByIndex: { index: number } }>()
 
   // inputのパターン
   const inputPattern = /\{\{[^}]+\}\}/g
@@ -98,11 +99,6 @@
       dragover: (event) => {
         event.stopPropagation()
         event.stopImmediatePropagation()
-        console.debug('[Editor] dragover', {
-          types: Array.from(event.dataTransfer?.types || []),
-          clientX: event.clientX,
-          clientY: event.clientY
-        })
         const dt = event.dataTransfer
         if (!dt) return false
         const types = Array.from(dt.types || [])
@@ -122,37 +118,25 @@
           try {
             const dt = event.dataTransfer
             if (!dt) {
-              console.warn('[Editor] drop: no dataTransfer')
               return
             }
             const types = Array.from(dt.types || [])
             const isKnown = types.includes('text/plain') || types.includes('application/x-codemirror-input')
             if (!isKnown) {
-              console.warn('[Editor] drop: unknown type', types)
               return
             }
-            const hasTextTry = (() => { try { return dt.getData('text/plain') !== '' } catch { return false } })()
-            console.debug('[Editor] drop', {
-              types,
-              hasText: hasTextTry,
-              items: dt.items ? Array.from(dt.items).map(i => ({ kind: i.kind, type: i.type })) : [],
-              files: dt.files ? Array.from(dt.files).map(f => ({ name: f.name, size: f.size, type: f.type })) : [],
-              clientX: event.clientX,
-              clientY: event.clientY
-            })
             const text = dt.getData('text/plain') || ''
             const dropPos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head
-            console.debug('[Editor] drop:pos', { dropPos, text })
             if (text) {
               // ドラッグ元が設定したカスタム MIME から type を取得
               const type = dt.getData('application/x-codemirror-input') || ''
               handleEditorTextInsert(view, dropPos, text, type)
             }
-          } catch (e) {
-            console.error('[Editor] Drop handling error (inner)', e)
+          } catch (_) {
+            // noop
           }
-        }).catch(e => {
-          console.error('[Editor] Drop handling error (promise)', e)
+        }).catch(_ => {
+          // noop
         })
         return true
       }
@@ -168,7 +152,6 @@
       const docText = view ? view.state.doc.toString() : ''
       name = generateUniqueInputName(name, inputs, docText)
 
-      console.debug('[Editor] text-insert', { from: pos, insert: `{{${name}}}`, via: opts?.moveCursorToEnd ? 'programmatic' : 'drop' })
       if (opts?.moveCursorToEnd) {
         view.dispatch({ changes: { from: pos, to: pos, insert: `{{${name}}}` }, selection: { anchor: pos + text.length } })
       } else {
@@ -177,7 +160,7 @@
       view.focus()
 
       if (name) {
-        dispatch('openAddInput', { name, type })
+        dispatch('openAddInput', { name, type, required: false })
       }
     }
   }
@@ -189,7 +172,6 @@
   }
 
   onMount(() => {
-    console.debug('[Editor] onMount')
     // エディタの状態を作成
     const startState = EditorState.create({
       doc: value,
@@ -208,7 +190,6 @@
           if (update.docChanged) {
             // ドキュメントが変更されたときの処理
             const newValue = update.state.doc.toString()
-            console.log('Document changed:', newValue)
             if (newValue !== value) {
               value = newValue
               // bind:value 用に値を更新し、一般的な互換性のため input/change も発火
@@ -225,10 +206,40 @@
       state: startState,
       parent: editorElement ?? undefined
     })
+
+    // input-plugin からのダブルクリック通知を直接 DOM リスナーで受け取り、親へ index を伝える
+    const handleCmInputOpen = (event: Event) => {
+      try {
+        const anyEvent = event as unknown as CustomEvent<{ name: string }>
+        const name = anyEvent?.detail?.name
+        if (!name) return
+        const idx = Array.isArray(inputs) ? inputs.findIndex(i => (i?.name ?? '').trim() === name) : -1
+        if (idx >= 0) {
+          dispatch('openEditInputByIndex', { index: idx })
+        }
+      } catch {
+        // noop
+      }
+    }
+    // 念のため root と content の両方で受け取る
+    view.dom.addEventListener('cm-input-open', handleCmInputOpen as EventListener)
+    view.contentDOM.addEventListener('cm-input-open', handleCmInputOpen as EventListener)
+
+    // クリーンアップ
+    const cleanup = () => {
+      view?.dom.removeEventListener('cm-input-open', handleCmInputOpen as EventListener)
+      view?.contentDOM.removeEventListener('cm-input-open', handleCmInputOpen as EventListener)
+    }
+    // onDestroy で呼ばれるようにフック
+    cmInputOpenCleanup = cleanup
   })
 
   onDestroy(() => {
     // コンポーネントが破棄されるときにエディタをクリーンアップ
+    if (cmInputOpenCleanup) {
+      cmInputOpenCleanup()
+      cmInputOpenCleanup = null
+    }
     if (view) {
       view.destroy()
     }
