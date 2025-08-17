@@ -14,6 +14,7 @@ export class InputDraggablePlugin {
   public decorations: DecorationSet
   private observer: MutationObserver | null = null
   private view?: EditorView
+  private keydownHandler: ((event: KeyboardEvent) => void) | null = null
 
   constructor(view: EditorView) {
     this.decorations = this.buildDecorations(view)
@@ -91,9 +92,6 @@ export class InputDraggablePlugin {
 
       const editorView = view || this.view
 
-      let isDragging = false
-      let dragData: { input: string; from: number; to: number } | null = null
-
       el.addEventListener(
         'mousedown',
         (event: MouseEvent) => {
@@ -103,94 +101,20 @@ export class InputDraggablePlugin {
             event.stopImmediatePropagation()
 
             if (window.getSelection) {
-              window.getSelection()?.removeAllRanges()
+              window.getSelection()?.empty()
             }
 
-            const input = el.textContent || ''
-            if (editorView) {
-              const pos = editorView.posAtDOM(el)
-              if (pos !== null) {
-                const doc = editorView.state.doc.toString()
-                const inputIndex = doc.indexOf(input, Math.max(0, pos - input.length))
-
-                if (inputIndex !== -1) {
-                  dragData = {
-                    input,
-                    from: inputIndex,
-                    to: inputIndex + input.length
-                  }
-
-                  isDragging = true
-                  internalDragInProgress = true
-                  el.classList.add('cm-dragging')
-
-                  const ghost = this.createGhostElement(input, getComputedStyle(el).fontFamily, 'fixed-follow')
-                  ghost.style.left = `${(event as MouseEvent).clientX + 10}px`
-                  ghost.style.top = `${(event as MouseEvent).clientY + 10}px`
-                  document.body.appendChild(ghost)
-
-                  const handleMouseMove = (e: MouseEvent) => {
-                    if (ghost) {
-                      ghost.style.left = `${e.clientX + 10}px`
-                      ghost.style.top = `${e.clientY + 10}px`
-                    }
-                  }
-
-                  const handleMouseUp = (e: MouseEvent) => {
-                    if (isDragging && dragData) {
-                      const dropPos = editorView.posAtCoords({ x: e.clientX, y: e.clientY })
-
-                      if (dropPos !== null && (dropPos < dragData.from || dropPos > dragData.to)) {
-                        const doc = editorView.state.doc
-                        const movedText = dragData.input
-                        const currentContent = doc.toString()
-
-                        let newContent: string
-                        let newCursorPos: number
-
-                        if (dropPos < dragData.from) {
-                          const before = currentContent.slice(0, dropPos)
-                          const middle = currentContent.slice(dropPos, dragData.from)
-                          const after = currentContent.slice(dragData.to)
-                          newContent = before + movedText + middle + after
-                          newCursorPos = dropPos + movedText.length
-                        } else {
-                          const before = currentContent.slice(0, dragData.from)
-                          const middle = currentContent.slice(dragData.to, dropPos)
-                          const after = currentContent.slice(dropPos)
-                          newContent = before + middle + movedText + after
-                          newCursorPos = dropPos - (dragData.to - dragData.from) + movedText.length
-                        }
-
-                        editorView.dispatch({
-                          changes: { from: 0, to: currentContent.length, insert: newContent },
-                          selection: { anchor: newCursorPos }
-                        })
-                      }
-                    }
-
-                    isDragging = false
-                    dragData = null
-                    el.classList.remove('cm-dragging')
-                    internalDragInProgress = false
-                    if (ghost && ghost.parentNode) {
-                      ghost.parentNode.removeChild(ghost)
-                    }
-                    document.removeEventListener('mousemove', handleMouseMove)
-                    document.removeEventListener('mouseup', handleMouseUp)
-                  }
-
-                  document.addEventListener('mousemove', handleMouseMove)
-                  document.addEventListener('mouseup', handleMouseUp)
-                }
-              }
-            }
+            this.handleCustomDrag(event, el, editorView)
           }
         },
         true
       )
 
       const handleDragStart = (event: DragEvent) => {
+        // mousedown でカスタムドラッグを実装しているため、ネイティブの dragstart はキャンセルする
+        // ただし、外部へのドラッグなど将来的な拡張のためにロジックは残しておく
+        // event.preventDefault()
+
         const input = el.textContent || ''
         const editorView = view || this.view
 
@@ -277,14 +201,96 @@ export class InputDraggablePlugin {
     }
   }
 
+  // mousedown ベースのカスタムドラッグ処理
+  private handleCustomDrag(event: MouseEvent, el: HTMLElement, editorView?: EditorView) {
+    if (!editorView) return
+
+    const input = el.textContent || ''
+    const pos = editorView.posAtDOM(el)
+    if (pos === null) return
+
+    const doc = editorView.state.doc.toString()
+    const inputIndex = doc.indexOf(input, Math.max(0, pos - input.length))
+    if (inputIndex === -1) return
+
+    const dragData = {
+      input,
+      from: inputIndex,
+      to: inputIndex + input.length
+    }
+
+    internalDragInProgress = true
+    el.classList.add('cm-dragging')
+
+    const ghost = this.createGhostElement(input, getComputedStyle(el).fontFamily, 'fixed-follow')
+    ghost.style.left = `${event.clientX + 10}px`
+    ghost.style.top = `${event.clientY + 10}px`
+    document.body.appendChild(ghost)
+
+    const handleMouseMove = (e: MouseEvent) => {
+      ghost.style.left = `${e.clientX + 10}px`
+      ghost.style.top = `${e.clientY + 10}px`
+    }
+
+    const handleMouseUp = (e: MouseEvent) => {
+      // Clean up listeners and state
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      internalDragInProgress = false
+      el.classList.remove('cm-dragging')
+      if (ghost.parentNode) {
+        ghost.parentNode.removeChild(ghost)
+      }
+
+      // Apply changes to the editor
+      const dropPos = editorView.posAtCoords({ x: e.clientX, y: e.clientY })
+      if (dropPos !== null && (dropPos < dragData.from || dropPos > dragData.to)) {
+        const doc = editorView.state.doc
+        const movedText = dragData.input
+        const currentContent = doc.toString()
+
+        let newContent: string
+        let newCursorPos: number
+
+        if (dropPos < dragData.from) {
+          const before = currentContent.slice(0, dropPos)
+          const middle = currentContent.slice(dropPos, dragData.from)
+          const after = currentContent.slice(dragData.to)
+          newContent = before + movedText + middle + after
+          newCursorPos = dropPos + movedText.length
+        } else {
+          const before = currentContent.slice(0, dragData.from)
+          const middle = currentContent.slice(dragData.to, dropPos)
+          const after = currentContent.slice(dropPos)
+          newContent = before + middle + movedText + after
+          newCursorPos = dropPos - (dragData.to - dragData.from) + movedText.length
+        }
+
+        editorView.dispatch({
+          changes: { from: 0, to: currentContent.length, insert: newContent },
+          selection: { anchor: newCursorPos }
+        })
+      }
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
+
   // 既存のプレースホルダーをドラッグ可能にする
   private makeDraggable(view: EditorView) {
-    window.setTimeout(() => {
-      const inputs = view.dom.querySelectorAll('.cm-input-draggable')
-      inputs.forEach((el) => {
-        this.setupDraggableElement(el as HTMLElement, view)
-      })
-    }, 10)
+    // DOMの更新が反映された後に要素をセットアップするため、requestMeasure を使用する。
+    // これにより、不要な再描画を防ぎ、より効率的にDOM操作を行える。
+    view.requestMeasure({
+      read: () => {
+        // 読み取りフェーズ: DOMから要素をクエリする
+        return Array.from(view.dom.querySelectorAll('.cm-input-draggable'))
+      },
+      write: (elements) => {
+        // 書き込みフェーズ: 読み取った要素にイベントリスナーなどを設定する
+        elements.forEach((el) => this.setupDraggableElement(el as HTMLElement, view))
+      }
+    })
   }
 
   private buildDecorations(view: EditorView): DecorationSet {
@@ -317,13 +323,18 @@ export class InputDraggablePlugin {
 
     const deco = builder.finish()
     // Ensure newly created elements get drag behavior
-    window.setTimeout(() => {
-      const inputs = view.dom.querySelectorAll('.cm-input-draggable')
-      inputs.forEach((el) => {
-        this.setupDraggableElement(el as HTMLElement, view)
-      })
-    }, 0)
-
+    // Decorationの適用後、同様に requestMeasure を使って安全に要素をセットアップする
+    view.requestMeasure({
+      read: () => {
+        return Array.from(view.dom.querySelectorAll('.cm-input-draggable'))
+      },
+      write: (elements) => {
+        elements.forEach((el) => {
+          this.setupDraggableElement(el as HTMLElement, view)
+        })
+      }
+    })
+    
     return deco
   }
 
@@ -372,7 +383,7 @@ export class InputDraggablePlugin {
 
   // キーボードイベントを監視してDEL/BACKSPACEでのプレースホルダー削除を処理
   private setupKeyboardListener(view: EditorView) {
-    const keydownHandler = (event: KeyboardEvent) => {
+    this.keydownHandler = (event: KeyboardEvent) => {
       if (event.key !== 'Delete' && event.key !== 'Backspace') return
 
       const selection = view.state.selection.main
@@ -428,13 +439,12 @@ export class InputDraggablePlugin {
       }
     }
     
-    view.dom.addEventListener('keydown', keydownHandler, true)
+    view.dom.addEventListener('keydown', this.keydownHandler, true)
     
     // クリーンアップのために参照を保存
     if (!this.view) {
       this.view = view
     }
-    ;(this.view as any)._keydownHandler = keydownHandler
   }
 
   destroy() {
@@ -444,9 +454,9 @@ export class InputDraggablePlugin {
     }
     
     // キーボードイベントリスナーをクリーンアップ
-    if (this.view && (this.view as any)._keydownHandler) {
-      this.view.dom.removeEventListener('keydown', (this.view as any)._keydownHandler, true)
-      delete (this.view as any)._keydownHandler
+    if (this.view && this.keydownHandler) {
+      this.view.dom.removeEventListener('keydown', this.keydownHandler, true)
+      this.keydownHandler = null
     }
   }
 }
