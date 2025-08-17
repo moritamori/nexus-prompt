@@ -14,7 +14,7 @@
   let cmInputOpenCleanup: (() => void) | null = null;
   export let value: string;
   export let inputs: PromptInputView[];
-  const dispatch = createEventDispatcher<{ input: string; change: string; openAddInput: { name: string; type: string, required: boolean }; openEditInputByIndex: { index: number } }>()
+  const dispatch = createEventDispatcher<{ input: string; change: string; openAddInput: { name: string; type: string, required: boolean }; openEditInputByIndex: { index: number }, deleteInput: { name: string } }>()
 
   // inputのパターン
   const inputPattern = /\{\{[^}]+\}\}/g
@@ -207,7 +207,6 @@
       parent: editorElement ?? undefined
     })
 
-    // input-plugin からのダブルクリック通知を直接 DOM リスナーで受け取り、親へ index を伝える
     const handleCmInputOpen = (event: Event) => {
       try {
         const anyEvent = event as unknown as CustomEvent<{ name: string }>
@@ -221,14 +220,31 @@
         // noop
       }
     }
-    // 念のため root と content の両方で受け取る
     view.dom.addEventListener('cm-input-open', handleCmInputOpen as EventListener)
     view.contentDOM.addEventListener('cm-input-open', handleCmInputOpen as EventListener)
+
+    const handleCmInputDelete = (_event: Event) => {
+      try {
+        const anyEvent = event as unknown as CustomEvent<{ name: string }>
+        const name = anyEvent?.detail?.name
+        if (!name) return
+        const idx = Array.isArray(inputs) ? inputs.findIndex(i => (i?.name ?? '').trim() === name) : -1
+        if (idx >= 0) {
+          dispatch('deleteInput', { name })
+        }
+      } catch {
+        // noop
+      }
+    }
+    view.dom.addEventListener('cm-input-delete', handleCmInputDelete as EventListener)
+    view.contentDOM.addEventListener('cm-input-delete', handleCmInputDelete as EventListener)
 
     // クリーンアップ
     const cleanup = () => {
       view?.dom.removeEventListener('cm-input-open', handleCmInputOpen as EventListener)
       view?.contentDOM.removeEventListener('cm-input-open', handleCmInputOpen as EventListener)
+      view?.dom.removeEventListener('cm-input-delete', handleCmInputDelete as EventListener)
+      view?.contentDOM.removeEventListener('cm-input-delete', handleCmInputDelete as EventListener)
     }
     // onDestroy で呼ばれるようにフック
     cmInputOpenCleanup = cleanup

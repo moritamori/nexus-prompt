@@ -38,12 +38,14 @@
   ];
 
   function openAddInputModal(_e: MouseEvent, defaultInput?: Partial<PromptInputView>) {
+    if (showInputModal) return;
     editingIndex = null;
     initialInput = defaultInput ?? { name: 'target_string', type: 'string', required: false };
     showInputModal = true;
   }
 
   function cancelAddInput() {
+    if (!showInputModal) return;
     if (editingIndex == null && initialInput?.name) {
       editorRef?.deleteVarName?.(initialInput.name);
     }
@@ -90,9 +92,30 @@
   }
 
   function onClickInputChip(index: number) {
+    if (showInputModal) return;
     editingIndex = index;
     initialInput = { ...(promptViewModel.inputs?.[index] ?? {}) };
     showInputModal = true;
+  }
+
+  function triggerDeleteInput(e: CustomEvent<{ name: string }>) {
+    const data = e.detail;
+    const name = (data?.name ?? '').trim();
+    if (name) {
+      promptViewModel.inputs = (promptViewModel.inputs ?? []).filter((inp, i) => inp.name !== name && (editingIndex == null || i !== editingIndex));
+    }
+  }
+
+  function handleDeleteInput() {
+    if (initialInput?.name) {
+      editorRef?.deleteVarName?.(initialInput.name);
+    }
+    if (editingIndex != null) {
+      promptViewModel.inputs = (promptViewModel.inputs ?? []).filter((_, i) => i !== editingIndex);
+    }
+    showInputModal = false;
+    editingIndex = null;
+    initialInput = undefined;
   }
 
   // Validation: プロンプトVMの検証ロジックを関数に分離
@@ -305,6 +328,7 @@
       bind:inputs={promptViewModel.inputs}
       on:openAddInput={(e) => openAddInputModal(new MouseEvent('click'), { name: e.detail.name, type: e.detail.type as any, required: e.detail.required })}
       on:openEditInputByIndex={(e) => onClickInputChip(e.detail.index)}
+      on:deleteInput={triggerDeleteInput}
     />
   </div>
 
@@ -326,17 +350,7 @@
     editing={editingIndex != null}
     on:save={handleSaveInput}
     on:cancel={cancelAddInput}
-    on:delete={() => {
-      if (initialInput?.name) {
-        editorRef?.deleteVarName?.(initialInput.name);
-      }
-      if (editingIndex != null) {
-        promptViewModel.inputs = (promptViewModel.inputs ?? []).filter((_, i) => i !== editingIndex);
-      }
-      showInputModal = false;
-      editingIndex = null;
-      initialInput = undefined;
-    }}
+    on:delete={handleDeleteInput}
   />
 {/if}
 
