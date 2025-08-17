@@ -19,7 +19,8 @@ export function dragStart(node: HTMLElement, text: string) {
     e.dataTransfer?.setData('text/plain', text);
     if (type) {
       try {
-        e.dataTransfer?.setData('application/x-codemirror-input', type)
+        // 外部（エディタ外）からのDnD識別用 MIME
+        e.dataTransfer?.setData('application/x-codemirror-input-type', type)
       } catch {}
     }
   }
@@ -87,4 +88,3 @@ export function onDragStartLocal(setIsDragging: (v: boolean) => void) {
 export function onDragEndLocal(setIsDragging: (v: boolean) => void) {
   return (_e?: DragEvent) => setIsDragging(false);
 }
-  

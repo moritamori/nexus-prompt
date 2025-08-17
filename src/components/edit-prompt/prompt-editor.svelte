@@ -5,7 +5,7 @@
   import { keymap } from '@codemirror/view'
   import { defaultKeymap, historyKeymap } from '@codemirror/commands'
   import { searchKeymap } from '@codemirror/search'
-  import { inputPlugin } from './plugins/input-plugin'
+  import { inputPlugin, internalDragInProgress } from './plugins/input-plugin'
   import type { PromptInputView } from '../../promptops/dsl/prompt/renderer'
   import { generateUniqueInputName } from '../../utils/unique-input-generator'
 
@@ -63,8 +63,8 @@
         WebkitUserSelect: "none !important",
         MozUserSelect: "none !important",
         msUserSelect: "none !important",
-        WebkitUserDrag: "element",  // macOS Safariでのドラッグサポート
-        pointerEvents: "auto !important"  // ポインターイベントを確実に受け取る
+        WebkitUserDrag: "element",
+        pointerEvents: "auto !important"
       },
       ".cm-input-draggable:hover": {
         backgroundColor: "#e0e0e0",
@@ -89,7 +89,9 @@
         const dt = event.dataTransfer
         if (!dt) return false
         const types = Array.from(dt.types || [])
-        const isKnown = types.includes('text/plain') || types.includes('application/x-codemirror-input')
+        const isKnown = types.includes('text/plain') ||
+          types.includes('application/x-codemirror-input-type') ||
+          types.includes('application/x-codemirror-input-internal')
         if (isKnown) {
           event.preventDefault()
           return true
@@ -102,10 +104,18 @@
         const dt = event.dataTransfer
         if (!dt) return false
         const types = Array.from(dt.types || [])
-        const isKnown = types.includes('text/plain') || types.includes('application/x-codemirror-input')
+        const isKnown = types.includes('text/plain') ||
+          types.includes('application/x-codemirror-input-type') ||
+          types.includes('application/x-codemirror-input-internal')
         if (isKnown) {
           event.preventDefault()
-          dt.dropEffect = types.includes('application/x-codemirror-input') ? 'move' : 'copy'
+          if (types.includes('application/x-codemirror-input-internal')) {
+            dt.dropEffect = 'move'
+          } else if (types.includes('application/x-codemirror-input-type')) {
+            dt.dropEffect = 'copy'
+          } else {
+            dt.dropEffect = 'copy'
+          }
           return true
         }
         return false
@@ -121,16 +131,29 @@
               return
             }
             const types = Array.from(dt.types || [])
-            const isKnown = types.includes('text/plain') || types.includes('application/x-codemirror-input')
+            const isKnown = types.includes('text/plain') ||
+              types.includes('application/x-codemirror-input-type') ||
+              types.includes('application/x-codemirror-input-internal')
             if (!isKnown) {
               return
             }
+            // 内部DnD（エディタ内の移動）はプラグイン側で処理し、ここでは何もしない
+            if (types.includes('application/x-codemirror-input-internal') || internalDragInProgress) {
+              return
+            }
+
             const text = dt.getData('text/plain') || ''
             const dropPos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head
-            if (text) {
-              // ドラッグ元が設定したカスタム MIME から type を取得
-              const type = dt.getData('application/x-codemirror-input') || ''
+            if (!text) return
+
+            if (types.includes('application/x-codemirror-input-type')) {
+              // 外部DnD（パレット→エディタ）。型情報付きで差し込み追加＋モーダルを開く
+              const type = dt.getData('application/x-codemirror-input-type') || ''
               handleEditorTextInsert(view, dropPos, text, type)
+            } else {
+              // 純テキストのDnDはそのまま挿入（モーダルは開かない）
+              view.dispatch({ changes: { from: dropPos, to: dropPos, insert: text } })
+              view.focus()
             }
           } catch (_) {
             // noop
@@ -144,7 +167,7 @@
   }
 
   // drop とプログラム挿入で共有するテキスト挿入ヘルパー
-  function handleEditorTextInsert(view: EditorView, pos: number, text: string, type: string, opts?: { moveCursorToEnd?: boolean }) {
+  function handleEditorTextInsert(view: EditorView, pos: number, text: string, type: string, opts?: { moveCursorToEnd?: boolean, openModal?: boolean }) {
     // テキストから {{name}} の name を抽出して、親に入力追加モーダルを開くリクエストを通知
     const match = text.match(inputPattern)
     if (match && match[0]) {
@@ -159,7 +182,7 @@
       }
       view.focus()
 
-      if (name) {
+      if (name && (opts?.openModal ?? true)) {
         dispatch('openAddInput', { name, type, required: false })
       }
     }
@@ -264,7 +287,7 @@
   export function insertTextAtCursor(text: string, type: string) {
     if (!view) return
     const pos = view.state.selection.main.head
-    handleEditorTextInsert(view, pos, text, type, { moveCursorToEnd: true })
+    handleEditorTextInsert(view, pos, text, type, { moveCursorToEnd: true, openModal: true })
   }
 
   export function replaceVarName(oldName: string, newName: string) {
