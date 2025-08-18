@@ -179,6 +179,16 @@ export class InputDraggablePlugin {
         (event: MouseEvent) => {
           event.preventDefault()
           event.stopPropagation()
+          // 同一要素上で重複して発火するケースを防止
+          ;(event as any).stopImmediatePropagation?.()
+
+          // 直近のダブルクリック発火を時間でデデュープ（念のための二重保険）
+          const now = Date.now()
+          const lastTs = parseInt(el.getAttribute('data-last-dblclick-ts') || '0')
+          if (!Number.isNaN(lastTs) && now - lastTs < 300) {
+            return
+          }
+          el.setAttribute('data-last-dblclick-ts', String(now))
 
           const raw = el.textContent || ''
           const name = raw.replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, '').trim()
@@ -196,7 +206,7 @@ export class InputDraggablePlugin {
             el.dispatchEvent(ev)
           }
         },
-        true
+        false
       )
     }
   }
