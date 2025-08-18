@@ -245,30 +245,24 @@ export class InputDraggablePlugin {
       // Apply changes to the editor
       const dropPos = editorView.posAtCoords({ x: e.clientX, y: e.clientY })
       if (dropPos !== null && (dropPos < dragData.from || dropPos > dragData.to)) {
-        const doc = editorView.state.doc
-        const movedText = dragData.input
-        const currentContent = doc.toString()
-
-        let newContent: string
-        let newCursorPos: number
-
-        if (dropPos < dragData.from) {
-          const before = currentContent.slice(0, dropPos)
-          const middle = currentContent.slice(dropPos, dragData.from)
-          const after = currentContent.slice(dragData.to)
-          newContent = before + movedText + middle + after
-          newCursorPos = dropPos + movedText.length
-        } else {
-          const before = currentContent.slice(0, dragData.from)
-          const middle = currentContent.slice(dragData.to, dropPos)
-          const after = currentContent.slice(dropPos)
-          newContent = before + middle + movedText + after
-          newCursorPos = dropPos - (dragData.to - dragData.from) + movedText.length
-        }
+        const { from, to, input } = dragData
+        // 元のテキストを削除し、新しい位置に挿入するトランザクションを作成
+        // 2つの変更を1つのアトミックな操作として扱う
+        const transaction = editorView.state.update({
+          changes: [
+            { from: from, to: to }, // 最初に元のテキストを削除
+            { from: dropPos, insert: input } // 次に新しい位置に挿入
+          ],
+          selection: { anchor: dropPos + (dropPos > from ? -input.length : input.length) },
+          userEvent: 'move'
+        })
 
         editorView.dispatch({
-          changes: { from: 0, to: currentContent.length, insert: newContent },
-          selection: { anchor: newCursorPos }
+          changes: transaction.changes,
+          selection: {
+            // カーソル位置をドロップ位置の末尾に調整
+            anchor: transaction.changes.mapPos(dropPos)
+          }
         })
       }
     }
