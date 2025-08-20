@@ -148,6 +148,7 @@ export class FileImportExportService {
           id: promptId,
           content: promptContent,
           order: prompts.length + 1,
+          shared: true,
           createdAt: nowIso,
           updatedAt: nowIso,
         });

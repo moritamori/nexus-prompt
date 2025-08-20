@@ -55,6 +55,19 @@
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
   }
 
+  .link-back {
+    @apply self-start inline-flex items-center gap-1 px-2 py-1 rounded-md border border-transparent text-[#0d6efd] bg-transparent cursor-pointer no-underline text-[13px] leading-6 transition-colors;
+  }
+  .link-back:hover { 
+    @apply bg-[#e7f1ff] border-[#cfe2ff] text-[#0b5ed7];
+  }
+  .link-back:active {
+    @apply translate-y-px;
+  }
+  .link-back:focus-visible {
+    @apply outline-none ring-2 ring-[#cfe2ff];
+  }
+
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -89,6 +102,7 @@
     z-index: 2000;
     animation: slideInRight 0.3s ease;
   }
+
 
   @keyframes slideInRight {
     from {

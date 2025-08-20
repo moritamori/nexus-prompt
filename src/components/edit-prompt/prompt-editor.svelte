@@ -244,7 +244,6 @@
       }
     }
     view.dom.addEventListener('cm-input-open', handleCmInputOpen as EventListener)
-    view.contentDOM.addEventListener('cm-input-open', handleCmInputOpen as EventListener)
 
     const handleCmInputDelete = (ev: Event) => {
       try {
@@ -260,14 +259,11 @@
       }
     }
     view.dom.addEventListener('cm-input-delete', handleCmInputDelete as EventListener)
-    view.contentDOM.addEventListener('cm-input-delete', handleCmInputDelete as EventListener)
 
     // クリーンアップ
     const cleanup = () => {
       view?.dom.removeEventListener('cm-input-open', handleCmInputOpen as EventListener)
-      view?.contentDOM.removeEventListener('cm-input-open', handleCmInputOpen as EventListener)
       view?.dom.removeEventListener('cm-input-delete', handleCmInputDelete as EventListener)
-      view?.contentDOM.removeEventListener('cm-input-delete', handleCmInputDelete as EventListener)
     }
     // onDestroy で呼ばれるようにフック
     cmInputOpenCleanup = cleanup

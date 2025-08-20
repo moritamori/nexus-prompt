@@ -127,4 +127,3 @@ export const entitlements = derived(plan, ($plan) => {
   const isEnterprise = current === 'enterprise';
   return { plan: current, isFree,isProOrAbove, isTeamOrAbove, isEnterprise };
 });
-

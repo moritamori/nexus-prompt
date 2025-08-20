@@ -4,6 +4,8 @@
   import { flip } from 'svelte/animate';
   import { appData, snapshotData, viewContext, isInitialized, showToast, capabilities, entitlements } from '../stores';
   import EditPrompt from './edit-prompt/detail.svelte';
+  import { useForwardToDetail } from '../actions/navigation';
+  import { movePrompt } from '../actions/prompts';
 
   // Local state
   let view = $state<'list' | 'edit'>('list');
@@ -127,6 +129,10 @@
     view = 'list';
     editingPromptId = null;
   }
+
+  useForwardToDetail((id: string | null) => {
+    openEditor(id ?? null);
+  });
 </script>
 
 <div class="prompts-container">
@@ -137,12 +143,14 @@
       </div>
       <div id="promptList" data-testid="prompt-list" class="prompt-list {$viewContext === 'popup' ? 'popup-view' : ''}">
         {#each promptListSorted as prompt (prompt.id)}
-        <div class="prompt-item" data-testid="prompt-item" in:fly={{ y: 20, duration: 250 }} animate:flip>
+        <div class="prompt-item js-prompt-item" data-testid="prompt-item" in:fly={{ y: 20, duration: 250 }} animate:flip>
           <div class="prompt-info">
             <h4>{prompt.content.name}</h4>
-            <p>{prompt.content.template.substring(0, 50)}...</p>
+            <p>{prompt.content.template.substring(0, 45)}...</p>
           </div>
           <div class="prompt-actions">
+            <button class="sort-button" aria-label="上へ" title="上へ" onclick={() => movePrompt(prompt.id, 'up')} disabled={promptListSorted[0]?.id === prompt.id}>↑</button>
+            <button class="sort-button" aria-label="下へ" title="下へ" onclick={() => movePrompt(prompt.id, 'down')} disabled={promptListSorted[promptListSorted.length - 1]?.id === prompt.id}>↓</button>
             <button class="edit-button" onclick={() => openInSidePanel(prompt.id)} disabled={deletingIds.has(prompt.id)}>編集</button>
             <button class="delete-button" onclick={() => deletePrompt(prompt.id)} disabled={deletingIds.has(prompt.id)}>{deletingIds.has(prompt.id) ? '削除中...' : '削除'}</button>
           </div>
@@ -195,5 +203,8 @@
 
   .prompt-actions {
     @apply flex gap-2.5;
+  }
+  .sort-button {
+    @apply px-2 py-1 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 </style> 

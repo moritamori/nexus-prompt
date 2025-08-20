@@ -2,9 +2,10 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import type { PromptInputView, PromptInputType } from '../../promptops/dsl/prompt/renderer';
   import { generateUniqueInputName } from '../../utils/unique-input-generator';
+  import { t } from '../../lib/translations/translations';
 
   // Props
-  let { inputTypes, initial, inputs, editing = false }: { inputTypes: { type: PromptInputType; typeLabel: string }[], initial?: Partial<PromptInputView>, inputs?: PromptInputView[], editing?: boolean } = $props();
+  let { inputTypes, initial, inputs, editing = false }: { inputTypes: PromptInputType[], initial?: Partial<PromptInputView>, inputs?: PromptInputView[], editing?: boolean } = $props();
 
   const dispatch = createEventDispatcher<{ save: PromptInputView; cancel: void; delete: void }>();
 
@@ -104,13 +105,6 @@
     }
   }
 
-  // 型に応じてデフォルト値を軽く初期化
-  $effect(() => {
-    if (defaultRaw === '') {
-      setDefaultRaw()
-    }
-  });
-
   function handleModalKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -142,7 +136,7 @@
         <label class="field-label" for="input-type">タイプ</label>
         <select bind:value={type} id="input-type" onchange={handleTypeChange}>
           {#each inputTypes as it}
-            <option value={it.type}>{it.typeLabel}</option>
+            <option value={it}>{$t(`common.input-type-${it}-name`)}</option>
           {/each}
         </select>
       </div>
@@ -170,21 +164,22 @@
       </div>
       <div class="form-group">
         <label class="field-label" for="input-description">説明</label>
-        <input type="text" bind:value={description} placeholder="任意の説明" id="input-description" />
+        <textarea bind:value={description} placeholder="任意の説明" id="input-description" rows={2} ></textarea>
       </div>
       <div class="form-group">
         <label class="field-label" for="input-default">デフォルト値</label>
         {#if type === 'string'}
-          <input type="text" bind:value={defaultRaw} id="input-default" />
+          <textarea bind:value={defaultRaw} id="input-default" rows={2} ></textarea>
         {:else if type === 'number'}
           <input type="number" bind:value={defaultRaw} id="input-default" />
         {:else if type === 'boolean'}
           <select id="input-default" bind:value={defaultRaw}>
-            <option value="true">はい</option>
-            <option value="false">いいえ</option>
+            <option value="">{$t(`common.input-type-boolean-none`)}</option>
+            <option value="true">{$t(`common.input-type-boolean-true`)}</option>
+            <option value="false">{$t(`common.input-type-boolean-false`)}</option>
           </select>
         {:else}
-          <input type="text" bind:value={defaultRaw} id="input-default" />
+          <textarea bind:value={defaultRaw} id="input-default" rows={2} ></textarea>
         {/if}
       </div>
     </div>

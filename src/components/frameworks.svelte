@@ -1,7 +1,9 @@
 <script lang="ts">
   import { autosize } from '../actions/autosize';
   import { appData, showToast, viewContext } from '../stores';
+  import { DEFAULT_FRAMEWORK } from '../data/default-framework';
   import { type FrameworkViewModel, createFrameworkViewModel, toFrameworkDsl } from '../promptops/dsl/framework/renderer';
+  import { useNavHistory } from '../actions/navigation';
   
   // Local state
   let frameworkViewModel = $state<FrameworkViewModel>({
@@ -17,7 +19,7 @@
   const MAX_FRAMEWORK_CONTENT_LENGTH = 20000;
 
   // Event handler
-  let { promptSelectionReset } = $props();
+  let { promptSelectionReset, backToSettings } = $props();
 
   function validateFrameworkViewModel(vm: FrameworkViewModel, maxLength: number): string | null {
     if (!vm.content.trim()) {
@@ -35,6 +37,10 @@
       frameworkViewModel = createFrameworkViewModel($appData.frameworks[0].content);
       initialized = true;
     }
+  });
+
+  const { backToListHandler } = useNavHistory(() => backToSettings(), {
+    getDetailState: () => ({ view: 'settings', screen: 'frameworks' }),
   });
 
   async function saveFramework(): Promise<void> {
@@ -70,16 +76,31 @@
       isLoading = false;
     }
   }
+
+  function resetFramework(): void {
+    frameworkViewModel = { ...frameworkViewModel, content: DEFAULT_FRAMEWORK };
+    showToast('デフォルトにリセットしました', 'success');
+  }
+  
+  function backToSettingsButtonHandler(): void {
+    if (isLoading) return;
+    backToListHandler();
+  }
 </script>
 
-<div class="framework-container">
+<div class="frameworks">
+  <button type="button" class="link-back" data-testid="back-to-list-button" onclick={backToSettingsButtonHandler}>← 設定へ戻る</button>
+
   <div class="form-group">
-    <label for="frameworkContent">プロンプト生成フレームワーク</label>
+    <div class="label-with-reset">
+      <label for="frameworkContent">プロンプト生成フレームワーク</label>
+      <button class="reset-button" onclick={resetFramework} disabled={isLoading}>リセット</button>
+    </div>
     <textarea 
       id="frameworkContent"
       bind:value={frameworkViewModel.content}
       disabled={isLoading}
-      use:autosize={{ maxRows: 20, minRows: 15, fixedRows: $viewContext === 'popup' ? 18 : undefined }}
+      use:autosize={{ maxRows: 18, minRows: 13, fixedRows: $viewContext === 'popup' ? 16 : undefined }}
       data-testid="framework-content-input"
       placeholder="フレームワーク情報を入力してください（例：コンテキスト、条件設定、対象など）">
     </textarea>
@@ -99,10 +120,26 @@
 
 <style>
   @reference "tailwindcss";
-  .framework-container {
+  .frameworks {
     @apply flex flex-col p-0 h-full gap-4;
   }
+
   .form-group { 
     @apply flex-1;
+  }
+  .label-with-reset {
+    @apply flex justify-between items-center;
+  }
+  .reset-button {
+    @apply px-3 py-1 border border-red-500 rounded-md text-sm font-medium text-red-500 bg-transparent cursor-pointer transition-all duration-200;
+  }
+  .reset-button:hover {
+    @apply bg-red-500 text-white -translate-y-px shadow-sm;
+  }
+  .reset-button:disabled {
+    @apply opacity-50 cursor-not-allowed -translate-y-0 shadow-none;
+  }
+  .reset-button:disabled:hover {
+    @apply bg-transparent text-red-500;
   }
 </style>

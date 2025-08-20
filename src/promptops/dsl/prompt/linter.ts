@@ -36,4 +36,6 @@ export function validateTemplateInputsConsistency(template: string, inputs: Arra
   return { missingInTemplate, missingInInputs };
 }
 
-
+export function hasRemainingPlaceholders(text: string): boolean {
+  return extractTemplateVariables(text).size > 0;
+}

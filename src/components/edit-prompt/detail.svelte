@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Prompt } from '../../types';
-  import { onMount, onDestroy } from 'svelte';
+  import { useNavHistory } from '../../actions/navigation';
   import PromptEditor from './prompt-editor.svelte';
   import { type PromptViewModel, createPromptViewModel, toPromptDsl, type PromptInputView } from '../../promptops/dsl/prompt/renderer';
   import { validateTemplateInputsConsistency } from '../../promptops/dsl/prompt/linter';
@@ -8,6 +8,8 @@
   import { showToast, entitlements } from '../../stores';
   import BasicInput from './inputs/basic.svelte';
   import InputModal from './input-modal.svelte';
+  import { t } from '../../lib/translations/translations';
+  import type { PromptInputType } from '../../promptops/dsl/prompt/renderer';
 
   // Local state
   let promptViewModel = $state<PromptViewModel>({
@@ -23,19 +25,13 @@
   let showInputModal = $state(false);
   let initialInput: Partial<PromptInputView> | undefined = $state({name: "target_string", type: "string", required: false});
   let editingIndex: number | null = $state(null);
-  let addedHistoryEntry = $state(false);
-  let popstateHandler: ((e: PopStateEvent) => void) | null = null;
-  let keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  // useNavHistoryが内部で履歴・戻るキー処理を担当するため、本コンポーネントでは状態を持たない
 
   // Constants
   const MAX_PROMPT_CONTENT_LENGTH = 10000;
   const MAX_PROMPT_NAME_LENGTH = 200;
   const MAX_PROMPT_COUNT = 20;
-  const INPUT_TYPES = [
-    { type: 'string' as const, typeLabel: 'テキスト' },
-    { type: 'number' as const, typeLabel: '数値' },
-    { type: 'boolean' as const, typeLabel: 'はい・いいえ' },
-  ];
+  const INPUT_TYPES = [ 'string', 'number', 'boolean' ] as PromptInputType[];
 
   function openAddInputModal(_e: MouseEvent, defaultInput?: Partial<PromptInputView>) {
     if (showInputModal) return;
@@ -80,15 +76,6 @@
     }
     showInputModal = false;
     initialInput = undefined;
-  }
-
-  function getTypeLabel(t: string, short: boolean = false): string {
-    const label = INPUT_TYPES.find((it) => it.type === t)?.typeLabel ?? t;
-    return short ? label.substring(0, 1) : label;
-  }
-
-  function getInputChipTitle(inp: PromptInputView): string {
-    return `差し込み定義（${getTypeLabel(inp.type)}：${inp.name}）を編集`;
   }
 
   function onClickInputChip(index: number) {
@@ -173,41 +160,8 @@
     })();
   });
 
-  onMount(() => {
-    try {
-      window.history.pushState({ view: 'edit-prompt' }, '');
-      addedHistoryEntry = true;
-    } catch {
-      // noop
-    }
-    popstateHandler = () => {
-      if (addedHistoryEntry) {
-        addedHistoryEntry = false;
-        backToList();
-      }
-    };
-    window.addEventListener('popstate', popstateHandler);
-
-    keydownHandler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || (e as any).keyCode === 27) {
-        if (showInputModal) return;
-        if (isSaving) return;
-        e.preventDefault();
-        backToListHandler();
-      }
-    };
-    window.addEventListener('keydown', keydownHandler);
-  });
-
-  onDestroy(() => {
-    if (popstateHandler) {
-      window.removeEventListener('popstate', popstateHandler);
-      popstateHandler = null;
-    }
-    if (keydownHandler) {
-      window.removeEventListener('keydown', keydownHandler);
-      keydownHandler = null;
-    }
+  const { backToListHandler } = useNavHistory(() => backToList(), {
+    getDetailState: () => ({ view: 'detail', id: promptId ?? null }),
   });
 
   async function save(): Promise<void> {
@@ -251,6 +205,7 @@
           id,
           content: toPromptDsl(promptViewModel),
           order: newData.prompts.length + 1,
+          shared: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -268,21 +223,15 @@
     }
   }
 
-  function backToListHandler(): void {
-    if (addedHistoryEntry) {
-      try {
-        window.history.back();
-      } catch {
-        backToList();
-      }
-    } else {
-      backToList();
-    }
+  function backToListButtonHandler(): void {
+    if (showInputModal) return;
+    if (isSaving) return;
+    backToListHandler();
   }
 </script>
 
 <div class="edit-prompt">
-  <button type="button" class="link-back" data-testid="back-to-list-button" onclick={backToListHandler}>← LLMプロンプト一覧へ戻る</button>
+  <button type="button" class="link-back" data-testid="back-to-list-button" onclick={backToListButtonHandler}>← LLMプロンプト一覧へ戻る</button>
 
   <div class="form-group">
     <label for="promptName">プロンプト名</label>
@@ -310,8 +259,15 @@
       {#if (promptViewModel.inputs?.length ?? 0) > 0}
         <div class="input-chips">
           {#each promptViewModel.inputs as inp, i}
-            <button type="button" class="input-chip" onclick={() => onClickInputChip(i)} title={getInputChipTitle(inp)} aria-label={getInputChipTitle(inp)}>
-              {getTypeLabel(inp.type, true)}
+            <button 
+              type="button" 
+              class="input-chip" 
+              onclick={() => onClickInputChip(i)} 
+              title={`差し込み定義（${$t(`common.input-type-${inp.type}-name`)}：${inp.name}）を編集`} 
+              aria-label={`差し込み定義（${$t(`common.input-type-${inp.type}-name`)}：${inp.name}）を編集`}
+              data-testid={`input-chip-${inp.name}`}
+            >
+              {$t(`common.input-type-${inp.type}-name`)}
             </button>
           {/each}
         </div>
@@ -319,7 +275,11 @@
     </div>
     <section class="inputs">
       {#each INPUT_TYPES as type}
-        <BasicInput editorRef={editorRef} type={type.type} typeLabel={type.typeLabel} />
+        <BasicInput 
+          editorRef={editorRef} 
+          type={type} 
+          typeLabel={$t(`common.input-type-${type}-name`)} 
+        />
       {/each}
     </section>
     <PromptEditor
@@ -333,7 +293,7 @@
   </div>
 
   <div class="input-button-group">
-    <button id="cancelPrompt" class="secondary-button" data-testid="cancel-prompt-button" onclick={backToListHandler} disabled={isSaving}>
+    <button id="cancelPrompt" class="secondary-button" data-testid="cancel-prompt-button" onclick={backToListButtonHandler} disabled={isSaving}>
       キャンセル
     </button>
     <button id="savePrompt" class="primary-button" data-testid="save-prompt-button" onclick={save} disabled={isSaving}>
@@ -358,12 +318,6 @@
   @reference "tailwindcss";
   .edit-prompt {
     @apply flex flex-col p-0 h-full gap-4;
-  }
-  .link-back {
-    @apply self-start inline-flex bg-none border-none p-0 text-[#0d6efd] cursor-pointer underline text-[13px] leading-6;
-  }
-  .link-back:hover { 
-    @apply opacity-85;
   }
   .inputs {
     display: flex;

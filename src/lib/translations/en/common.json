@@ -1,0 +1,9 @@
+{
+	"input-type-string-name": "テキスト",
+	"input-type-number-name": "数値",
+	"input-type-boolean-name": "はい・いいえ",
+	"input-type-boolean-not-selected": "未選択",
+	"input-type-boolean-none": "なし",
+	"input-type-boolean-true": "はい",
+	"input-type-boolean-false": "いいえ"
+}

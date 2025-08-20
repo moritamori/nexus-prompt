@@ -9,7 +9,6 @@ export function generateUniqueInputName(
   existingInputs: PromptInputView[],
   docText: string
 ): string {
-  console.log('generateUniqueInputName', originalName, existingInputs, docText)
   const baseName = originalName.trim()
   if (!baseName) return baseName
 

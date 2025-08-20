@@ -5,6 +5,7 @@ export interface Prompt {
   id: string;
   content: LatestPromptDsl;
   order: number;
+  shared: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -38,6 +39,7 @@ export interface Provider {
 
 export interface Settings {
   defaultFrameworkId: string;
+  language: string;
   version: string;
 }
 
@@ -53,7 +55,7 @@ export interface SnapshotData {
   selectedPromptId: string;
   resultArea: string;
   selectedModelId: string;
-  activeTab: 'main' | 'prompts' | 'frameworks' | 'settings';
+  activeTab: 'main' | 'prompt-improvement' | 'prompts' | 'settings';
   editingTarget: {
     type: 'prompt' | 'framework' | null;
     id: string;

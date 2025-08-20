@@ -18,6 +18,7 @@ test.describe('プロンプト適用（LLM連携）', () => {
         id: 'prompt-1',
         content: { version: 2, id: 'prompt-1', name: 'コーディング質問プロンプト', template: 'プログラミングの質問に答える際は、具体的なコード例を含めて説明してください。', inputs: [], frameworkRef: 'framework-1', tags: [] },
         order: 1,
+        shared: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
@@ -59,7 +60,8 @@ test.describe('プロンプト適用（LLM連携）', () => {
     ],
     settings: {
       defaultFrameworkId: 'framework-1',
-      version: '1.0.2'
+      version: '1.0.2',
+      language: 'ja'
     }
   };
   
@@ -85,6 +87,7 @@ test.describe('プロンプト適用（LLM連携）', () => {
 
       await page.goto(extensionUrl('popup.html'));
       await page.waitForSelector('[data-testid="nexus-prompt"]');
+      await page.click('button:has-text("プロンプト改善")');
 
       await page.selectOption('[data-testid="model-select"]', 'model-gemini');
       await page.fill('[data-testid="user-prompt-input"]', TEST_PROMPT);
@@ -111,6 +114,7 @@ test.describe('プロンプト適用（LLM連携）', () => {
 
       await page.goto(extensionUrl('popup.html'));
       await page.waitForSelector('[data-testid="nexus-prompt"]');
+      await page.click('button:has-text("プロンプト改善")');
 
       await page.selectOption('[data-testid="model-select"]', 'model-gemini');
       await page.fill('[data-testid="user-prompt-input"]', TEST_PROMPT);
@@ -127,6 +131,8 @@ test.describe('プロンプト適用（LLM連携）', () => {
 
       await page.goto(extensionUrl('popup.html'));
       await page.waitForSelector('[data-testid="nexus-prompt"]');
+      await page.click('button:has-text("プロンプト改善")');
+
       await page.click('[data-testid="apply-button"]');
 
       await expect(page.locator('[data-testid="message-area"]')).toHaveText("プロンプトとLLMプロンプトの両方を入力・選択してください");
@@ -139,6 +145,7 @@ test.describe('プロンプト適用（LLM連携）', () => {
 
       await page.goto(extensionUrl('popup.html'));
       await page.waitForSelector('[data-testid="nexus-prompt"]');
+      await page.click('button:has-text("プロンプト改善")');
 
       await page.selectOption('[data-testid="model-select"]', 'model-gemini');
       await page.fill('[data-testid="user-prompt-input"]', TEST_PROMPT);
@@ -184,6 +191,7 @@ test.describe('プロンプト適用（LLM連携）', () => {
 
       await page.goto(`chrome-extension://${extensionId}/popup.html`);
       await page.waitForSelector('[data-testid="nexus-prompt"]');
+      await page.click('button:has-text("プロンプト改善")');
 
       await page.selectOption('[data-testid="model-select"]', 'model-gemini');
       await page.fill('[data-testid="user-prompt-input"]', TEST_PROMPT);

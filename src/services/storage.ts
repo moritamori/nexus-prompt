@@ -1,6 +1,7 @@
 import type { AppData, Framework, Prompt, Provider, SnapshotData } from '../types';
 import { SecureApiKeyManager } from '../secure-api-key-manager';
 import { providersData } from '../data/llm-providers';
+import { DEFAULT_FRAMEWORK } from '../data/default-framework';
 import { Provider as ProviderData, Model as ModelData } from '../data/types';  
 import { v6 as uuidv6 } from 'uuid';
 
@@ -62,7 +63,7 @@ export class StorageService {
             id: frameworkId,
             slug: 'default-framework',
             name: 'デフォルトフレームワーク',
-            content: '',
+            content: DEFAULT_FRAMEWORK,
           },
           order: 1,
           createdAt: new Date().toISOString(),
@@ -70,7 +71,8 @@ export class StorageService {
         }],
         settings: {
           defaultFrameworkId: frameworkId,
-          version: '1.2.1' // TODO: manifest.jsonから動的に取得する
+          language: 'ja',
+          version: '1.3.0' // TODO: manifest.jsonから動的に取得する
         }
       };
       await this.saveAppData(defaultData);
@@ -284,7 +286,7 @@ export class StorageService {
     await this.saveSnapshot(data);
   }
 
-  async saveActiveTab(tab: 'main' | 'prompts' | 'frameworks' | 'settings'): Promise<void> {
+  async saveActiveTab(tab: 'main' | 'prompt-improvement' | 'prompts' | 'settings'): Promise<void> {
     const data = await this.getSnapshot();
     data.activeTab = tab;
     await this.saveSnapshot(data);

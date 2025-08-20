@@ -4,15 +4,29 @@ import { ApiKeyAuthenticationError } from './services/api-errors';
 
 const apiServiceFactory = new ApiServiceFactory();
 
-// 拡張機能のインストール時・アップデート時に実行
-chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log(`onInstalled event triggered. Reason: ${details.reason}`);
+const CONTEXT_MENU_ID = 'toggle-side-panel';
+
+chrome.runtime.onInstalled.addListener(async (_details) => {
   await storageService.initializeAppData();
-  console.log('Data initialization/migration check complete.');
+  
+  chrome.contextMenus.create({
+    id: CONTEXT_MENU_ID,
+    title: 'サイドパネルを開く',
+    contexts: ['action']
+  });
 });
 
-// E2Eテストから初期化処理を呼び出すためのフック
 (self as any)._test_initialize = () => storageService.initializeAppData();
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === CONTEXT_MENU_ID && tab?.id) {
+    try {
+      await chrome.sidePanel.open({ tabId: tab.id });
+    } catch (error) {
+      console.error('Failed to open side panel:', error);
+    }
+  }
+});
 
 // API呼び出しを処理するメッセージリスナー
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

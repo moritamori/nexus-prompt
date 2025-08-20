@@ -3,10 +3,11 @@
   import { onMount } from 'svelte';
   import { STORAGE_KEY, SNAPSHOT_STORAGE_KEY } from '../services/storage';
   import Settings from './settings.svelte'; 
-  import Frameworks from './frameworks.svelte';
   import Prompts from './prompts.svelte';
   import PromptImprovement from './prompt-improvement.svelte';
+  import PromptPlayground from './prompt-playground.svelte';
   import { get } from 'svelte/store';
+  import { loadTranslations } from '../lib/translations/translations';
   import { appData, snapshotData, initializeStores, viewContext, isInitialized, toast } from '../stores';
   import '../chrome-mock'; // 開発環境用のChrome APIモック
 
@@ -18,7 +19,6 @@
       const newData = changes[STORAGE_KEY].newValue as AppData | null;
       if (newData && JSON.stringify(get(appData)) !== JSON.stringify(newData)) {
         appData.setFromStorage(newData);
-        console.log('AppData has been updated from storage change.');
       }
     }
 
@@ -26,12 +26,12 @@
       const newSnapshot = changes[SNAPSHOT_STORAGE_KEY].newValue as SnapshotData | null;
       if (newSnapshot && JSON.stringify(get(snapshotData)) !== JSON.stringify(newSnapshot)) {
         snapshotData.setFromStorage(newSnapshot);
-        console.log('Snapshot has been updated from storage change.');
       }
     }
   };
 
   onMount(() => {
+    loadTranslations("ja", "/"); 
     initializeStores();
 
     chrome.storage.onChanged.addListener(handleStorageChange);
@@ -68,7 +68,7 @@
   async function switchTab(tabName: string): Promise<void> {
     snapshotData.update((current: SnapshotData | null) => {
       if (!current) return null;
-      return { ...current, activeTab: tabName as 'main' | 'prompts' | 'frameworks' | 'settings' };
+      return { ...current, activeTab: tabName as 'main' | 'prompt-improvement' | 'prompts' | 'settings' };
     });
   }
 
@@ -91,14 +91,14 @@
         メイン画面
       </button>
       <button 
+        class="tab-button {$snapshotData.activeTab === 'prompt-improvement' ? 'active' : ''}" 
+        onclick={() => switchTab('prompt-improvement')}>
+        プロンプト改善
+      </button>
+      <button 
         class="tab-button {$snapshotData.activeTab === 'prompts' ? 'active' : ''}" 
         onclick={() => switchTab('prompts')}>
         LLMプロンプト管理
-      </button>
-      <button 
-      class="tab-button {$snapshotData.activeTab === 'frameworks' ? 'active' : ''}" 
-        onclick={() => switchTab('frameworks')}>
-        フレームワーク管理
       </button>
       <button 
         class="tab-button {$snapshotData.activeTab === 'settings' ? 'active' : ''}" 
@@ -109,8 +109,15 @@
   </div>
 
   {#if $isInitialized && $appData && $snapshotData && $viewContext}
-    <!-- メイン画面（プロンプト改善） -->
+    <!-- メイン画面 -->
     {#if $snapshotData.activeTab === 'main'}
+    <div id="main" class="tab-content active">
+      <PromptPlayground />
+    </div>
+    {/if}
+
+    <!-- プロンプト改善 -->
+    {#if $snapshotData.activeTab === 'prompt-improvement'}
     <div id="main" class="tab-content active">
       <PromptImprovement switchTab={switchTab} selectedPromptIdFromParent={$snapshotData?.selectedPromptId || ''} />
     </div>
@@ -123,17 +130,10 @@
     </div>
     {/if}
 
-    <!-- フレームワーク管理 -->
-    {#if $snapshotData.activeTab === 'frameworks'}
-    <div id="frameworks" class="tab-content active">
-      <Frameworks promptSelectionReset={handlePromptSelectionReset} />
-    </div>
-    {/if}
-
     <!-- 設定（APIキー） -->
     {#if $snapshotData.activeTab === 'settings'}
     <div id="settings" class="tab-content active">
-      <Settings />
+      <Settings promptSelectionReset={handlePromptSelectionReset}/>
     </div>
     {/if}
   {/if}

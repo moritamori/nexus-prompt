@@ -50,7 +50,8 @@ test.describe('フレームワーク管理テスト', () => {
     ],
     settings: {
       defaultFrameworkId: 'test-framework-id',
-      version: '1.0.0'
+      version: '1.0.0',
+      language: 'ja'
     }
   };
 
@@ -66,7 +67,9 @@ test.describe('フレームワーク管理テスト', () => {
     await page.goto(extensionUrl('popup.html'));
     await page.waitForSelector('[data-testid="nexus-prompt"]');
 
-    await page.click('.tab-button:has-text("フレームワーク管理")');
+    await page.click('button:has-text("設定")');
+    await page.waitForSelector('[data-testid="open-frameworks-link"]');
+    await page.click('[data-testid="open-frameworks-link"]');
 
     const newContent = '新しいフレームワーク内容\n\n# 新しい条件\n- 新条件1\n- 新条件2\n\n# 出力形式\n- JSON形式で出力';
     await page.fill('[data-testid="framework-content-input"]', newContent);
@@ -94,7 +97,9 @@ test.describe('フレームワーク管理テスト', () => {
 
     await page.reload();
     await page.waitForSelector('[data-testid="nexus-prompt"]');
-    await page.click('.tab-button:has-text("フレームワーク管理")');
+    await page.click('button:has-text("設定")');
+    await page.waitForSelector('[data-testid="open-frameworks-link"]');
+    await page.click('[data-testid="open-frameworks-link"]');
     const frameworkContentInput = await page.waitForSelector('[data-testid="framework-content-input"]');
 
     const reloadedContent = await frameworkContentInput.inputValue();
@@ -109,7 +114,9 @@ test.describe('フレームワーク管理テスト', () => {
     await page.goto(extensionUrl('popup.html'));
     await page.waitForSelector('[data-testid="nexus-prompt"]');
 
-    await page.click('.tab-button:has-text("フレームワーク管理")');
+    await page.click('button:has-text("設定")');
+    await page.waitForSelector('[data-testid="open-frameworks-link"]');
+    await page.click('[data-testid="open-frameworks-link"]');
     await page.fill('[data-testid="framework-content-input"]','');
     await page.click('[data-testid="save-framework-button"]');
 
@@ -134,7 +141,9 @@ test.describe('フレームワーク管理テスト', () => {
     await page.goto(extensionUrl('popup.html'));
     await page.waitForSelector('[data-testid="nexus-prompt"]');
 
-    await page.click('.tab-button:has-text("フレームワーク管理")');
+    await page.click('button:has-text("設定")');
+    await page.waitForSelector('[data-testid="open-frameworks-link"]');
+    await page.click('[data-testid="open-frameworks-link"]');
     await page.fill('[data-testid="framework-content-input"]', '   \n\t  \n  ');
     await page.click('[data-testid="save-framework-button"]');
 

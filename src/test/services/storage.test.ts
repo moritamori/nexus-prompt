@@ -280,7 +280,7 @@ describe('StorageService', () => {
       const framework2 = createMockFramework({ id: 'fw2', content: { version: 2, id: 'fw2', name: 'フレームワーク2', content: 'フレームワーク2', slug: 'test-framework', metadata: {} } });
       const testData = createMockAppData({
         frameworks: [framework1, framework2],
-        settings: { defaultFrameworkId: 'fw2', version: '1.0.0' },
+        settings: { defaultFrameworkId: 'fw2', version: '1.0.0', language: 'ja' },
       });
 
       mockChromeStorage.local.get.mockResolvedValue({
@@ -307,7 +307,7 @@ describe('StorageService', () => {
       const framework2 = createMockFramework({ id: 'fw2', content: { version: 2, id: 'fw2', name: 'フレームワーク2', content: 'フレームワーク2', slug: 'test-framework', metadata: {} } });
       const testData = createMockAppData({
         frameworks: [framework1, framework2],
-        settings: { defaultFrameworkId: 'non-existent-id', version: '1.0.0' },
+        settings: { defaultFrameworkId: 'non-existent-id', version: '1.0.0', language: 'ja' },
       });
 
       mockChromeStorage.local.get.mockResolvedValue({
@@ -346,7 +346,7 @@ describe('StorageService', () => {
       const existingFramework = createMockFramework({ id: 'fw1' });
       const testData = createMockAppData({
         frameworks: [existingFramework],
-        settings: { defaultFrameworkId: 'fw1', version: '1.0.0' },
+        settings: { defaultFrameworkId: 'fw1', version: '1.0.0', language: 'ja' },
       });
       const newFramework = createMockFramework({ id: 'fw2' });
       mockChromeStorage.local.get.mockResolvedValue({
@@ -372,7 +372,7 @@ describe('StorageService', () => {
       const testData = createMockAppData({
         frameworks: [testFramework],
         prompts: testPrompts,
-        settings: { defaultFrameworkId: testFramework.id, version: '1.0.0' },
+        settings: { defaultFrameworkId: testFramework.id, version: '1.0.0', language: 'ja' },
       });
 
       mockChromeStorage.local.get.mockResolvedValue({
@@ -404,7 +404,7 @@ describe('StorageService', () => {
       const testData = createMockAppData({
         frameworks: [testFramework],
         prompts: [existingPrompt],
-        settings: { defaultFrameworkId: testFramework.id, version: '1.0.0' },
+        settings: { defaultFrameworkId: testFramework.id, version: '1.0.0', language: 'ja' },
       });
 
       const updatedPrompt: Prompt = {
@@ -440,7 +440,7 @@ describe('StorageService', () => {
       const testData = createMockAppData({
         frameworks: [testFramework],
         prompts: [existingPrompt],
-        settings: { defaultFrameworkId: testFramework.id, version: '1.0.0' },
+        settings: { defaultFrameworkId: testFramework.id, version: '1.0.0', language: 'ja' },
       });
       const newPrompt = createMockPrompt({ id: 'p2' });
 
@@ -472,7 +472,7 @@ describe('StorageService', () => {
       const testData = createMockAppData({
         frameworks: [testFramework],
         prompts: [prompt1, prompt2],
-        settings: { defaultFrameworkId: testFramework.id, version: '1.0.0' },
+        settings: { defaultFrameworkId: testFramework.id, version: '1.0.0', language: 'ja' },
       });
 
       mockChromeStorage.local.get.mockResolvedValue({

@@ -1,21 +1,25 @@
 <script lang="ts">
   import { storageService } from '../services/storage';
-  import { FileImportExportService } from '../services/file-import-export';
   import { showToast } from '../stores';
+  import Frameworks from './frameworks.svelte';
+  import { useForwardToDetail, useForwardToScreen } from '../actions/navigation';
+  import DataManagement from './data-management.svelte';
 
   // Local state
+  let view = $state<'settings' | 'api-key' | 'frameworks' | 'data-management'>('settings');
   let geminiApiKey = $state('');
   let openaiApiKey = $state('');
   let anthropicApiKey = $state('');
   let isLoading = $state(false);
-  let isImportExportLoading = $state(false);
   let initialized = $state(false);
   
   // Constants
   const MAX_API_KEY_LENGTH = 300;
 
+  // Event handler
+  let { promptSelectionReset } = $props();
+
   // Services
-  const fileImportExportService = new FileImportExportService();
 
   $effect(() => {
     (async () => {
@@ -62,180 +66,124 @@
     }
   }
 
-  async function exportFile(): Promise<void> {
-    try {
-      isImportExportLoading = true;
-      const zipBytes = await fileImportExportService.export();
+  // データ管理は専用画面に移動
 
-      // ZIPダウンロードの実行（ArrayBufferに切り出して型互換にする）
-      const arrayBuffer = zipBytes.buffer.slice(
-        zipBytes.byteOffset,
-        zipBytes.byteOffset + zipBytes.byteLength
-      ) as ArrayBuffer;
-      const blob = new Blob([arrayBuffer], { type: 'application/zip' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `nexus-prompt-export-${new Date().toISOString().split('T')[0]}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      showToast('データをZIPとしてエクスポートしました', 'success');
-    } catch (error) {
-      console.error('エクスポート中にエラーが発生:', error);
-      showToast('エクスポートに失敗しました', 'error');
-    } finally {
-      isImportExportLoading = false;
-    }
-  }
+  useForwardToDetail((_id: string | null) => {
+    view = 'frameworks';
+  });
 
-  async function importFile(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    
-    if (!file) {
-      return;
+  // 履歴の「進む」で settings配下のサブ画面を復元
+  useForwardToScreen((screen: string) => {
+    if (screen === 'frameworks' || screen === 'data-management') {
+      view = screen as any;
     }
-
-    if (!window.confirm('既存のデータは上書かれます。本当にインポートしてよろしいですか？')) {
-      input.value = '';
-      return;
-    }
-
-    try {
-      isImportExportLoading = true;
-      const arrayBuffer = await file.arrayBuffer();
-      await fileImportExportService.import(arrayBuffer);
-      
-      showToast('フレームワークデータをインポートしました', 'success');
-    } catch (error) {
-      console.error('インポート中にエラーが発生:', error);
-      const rawMessage = error instanceof Error ? error.message : 'インポートに失敗しました';
-      const normalizedMessage = /central directory|zip file/i.test(rawMessage)
-        ? 'インポートファイルの形式が正しくありません。'
-        : rawMessage;
-      showToast(normalizedMessage, 'error');
-    } finally {
-      isImportExportLoading = false;
-      input.value = '';
-    }
-  }
-
-  function openFileDialog(): void {
-    const fileInput = document.getElementById('import-file-input') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.click();
-    }
-  }
+  }, 'settings');
 </script>
 
 <div class="settings-container">
-  <!-- APIキーセクション -->
-  <div class="setting-api-key-section">
-    <div class="form-group">
-      <label for="geminiApiKey">Gemini APIキー</label>
-      <div class="input-button-group">
-        <input 
-          type="password" 
-          id="geminiApiKey"
-          bind:value={geminiApiKey}
-          disabled={isLoading}
-          data-testid="gemini-api-key-input"
-          placeholder="APIキーを入力してください">
-        <button
-          id="saveApiKey"
-          class="primary-button"
-          onclick={() => saveApiKeyFor('Gemini')}
-          data-testid="save-gemini-api-key-button"
-          disabled={isLoading}>{isLoading ? '保存中...' : '保存'}
-        </button>
+  {#if view === 'settings'}
+    <!-- APIキーセクション -->
+    <div class="setting-api-key-section">
+      <div class="form-group">
+        <label for="geminiApiKey">Gemini APIキー</label>
+        <div class="input-button-group">
+          <input 
+            type="password" 
+            id="geminiApiKey"
+            bind:value={geminiApiKey}
+            disabled={isLoading}
+            data-testid="gemini-api-key-input"
+            placeholder="APIキーを入力してください">
+          <button
+            id="saveApiKey"
+            class="primary-button"
+            onclick={() => saveApiKeyFor('Gemini')}
+            data-testid="save-gemini-api-key-button"
+            disabled={isLoading}>{isLoading ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="openaiApiKey">OpenAI APIキー</label>
+        <div class="input-button-group">
+          <input 
+            type="password" 
+            id="openaiApiKey"
+            bind:value={openaiApiKey}
+            disabled={isLoading}
+            data-testid="openai-api-key-input"
+            placeholder="APIキーを入力してください">
+          <button
+            id="saveApiKey"
+            class="primary-button"
+            onclick={() => saveApiKeyFor('OpenAI')}
+            data-testid="save-openai-api-key-button"
+            disabled={isLoading}>{isLoading ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="anthropicApiKey">Anthropic APIキー</label>
+        <div class="input-button-group">
+          <input 
+            type="password" 
+            id="anthropicApiKey"
+            bind:value={anthropicApiKey}
+            disabled={isLoading}
+            data-testid="anthropic-api-key-input"
+            placeholder="APIキーを入力してください">
+          <button
+            id="saveApiKey"
+            class="primary-button"
+            onclick={() => saveApiKeyFor('Anthropic')}
+            data-testid="save-anthropic-api-key-button"
+            disabled={isLoading}>{isLoading ? '保存中...' : '保存'}
+          </button>
+        </div>
       </div>
     </div>
-    <div class="form-group">
-      <label for="openaiApiKey">OpenAI APIキー</label>
-      <div class="input-button-group">
-        <input 
-          type="password" 
-          id="openaiApiKey"
-          bind:value={openaiApiKey}
-          disabled={isLoading}
-          data-testid="openai-api-key-input"
-          placeholder="APIキーを入力してください">
-        <button
-          id="saveApiKey"
-          class="primary-button"
-          onclick={() => saveApiKeyFor('OpenAI')}
-          data-testid="save-openai-api-key-button"
-          disabled={isLoading}>{isLoading ? '保存中...' : '保存'}
-        </button>
-      </div>
-    </div>
-    <div class="form-group">
-      <label for="anthropicApiKey">Anthropic APIキー</label>
-      <div class="input-button-group">
-        <input 
-          type="password" 
-          id="anthropicApiKey"
-          bind:value={anthropicApiKey}
-          disabled={isLoading}
-          data-testid="anthropic-api-key-input"
-          placeholder="APIキーを入力してください">
-        <button
-          id="saveApiKey"
-          class="primary-button"
-          onclick={() => saveApiKeyFor('Anthropic')}
-          data-testid="save-anthropic-api-key-button"
-          disabled={isLoading}>{isLoading ? '保存中...' : '保存'}
-        </button>
-      </div>
-    </div>
-  </div>
 
-  <!-- インポート・エクスポートセクション -->
-  <div class="import-export-section">
-    <h3>データ管理</h3>
-    <div class="import-export-group">
-      <div class="import-export-item">
-        <!-- svelte-ignore a11y_label_has_associated_control -->
-        <label>フレームワーク・LLMプロンプトデータのエクスポート</label>
-        <p class="description">作成したフレームワークとLLMプロンプトをJSONファイルとしてダウンロードします</p>
-        <button
-          class="secondary-button"
-          onclick={exportFile}
-          disabled={isImportExportLoading}
-          data-testid="export-button">
-          {isImportExportLoading ? 'エクスポート中...' : 'エクスポート'}
-        </button>
+    <!-- データ管理セクション（導線） -->
+    <div class="data-management-section">
+      <div class="data-management-header">
+        <h3>データ管理</h3>
+        <span class="inline-description">LLMプロンプトのエクスポート/インポートはこちらから行えます。</span>
       </div>
-      
-      <div class="import-export-item">
-        <!-- svelte-ignore a11y_label_has_associated_control -->
-        <label>フレームワーク・LLMプロンプトデータのインポート</label>
-        <p class="description">JSONファイルからフレームワークとLLMプロンプトをインポートします（既存データは上書きされます）</p>
-        <button
-          class="secondary-button"
-          onclick={openFileDialog}
-          disabled={isImportExportLoading}
-          data-testid="import-button">
-          {isImportExportLoading ? 'インポート中...' : 'インポート'}
-        </button>
-        <input
-          id="import-file-input"
-          type="file"
-          accept=".zip"
-          onchange={importFile}
-          style="display: none;"
-          data-testid="import-file-input" />
-      </div>
+      <a
+        href="#data-management"
+        class="text-blue-500"
+        data-testid="open-data-management-link"
+        onclick={(e) => { e.preventDefault(); view = 'data-management'; }}
+      >
+        データ管理を開く
+      </a>
     </div>
-  </div>
 
-  <div class="feedback-link">
-    <p>不具合の報告や機能のご要望は、ぜひこちらからお寄せください。</p>
-    <a href="https://docs.google.com/forms/d/1GnBes2W30efxIYPVCICifyJRf6Mm1oFZf9zwV6tXcT8/viewform" target="_blank" rel="noopener noreferrer">フィードバックを送る</a>
-  </div>
+    <!-- フレームワークセクション -->
+    <div class="frameworks-section">
+      <div class="frameworks-header">
+        <h3>フレームワーク</h3>
+        <span class="inline-description">フレームワークの編集はこちらから行えます。</span>
+      </div>
+      <a
+        href="#frameworks"
+        class="text-blue-500"
+        data-testid="open-frameworks-link"
+        onclick={(e) => { e.preventDefault(); view = 'frameworks'; }}
+      >
+        フレームワーク管理を開く
+      </a>
+    </div>
+
+    <div class="feedback-link">
+      <p>不具合の報告や機能のご要望は、ぜひこちらからお寄せください。</p>
+      <a href="https://docs.google.com/forms/d/1GnBes2W30efxIYPVCICifyJRf6Mm1oFZf9zwV6tXcT8/viewform" target="_blank" rel="noopener noreferrer">フィードバックを送る</a>
+    </div>
+  {:else if view === 'frameworks'}
+    <Frameworks promptSelectionReset={promptSelectionReset} backToSettings={() => view = 'settings'} />
+  {:else if view === 'data-management'}
+    <DataManagement backToSettings={() => view = 'settings'} />
+  {/if}
 </div>
 
 <style>
@@ -246,23 +194,22 @@
   .settings-container {
     @apply flex flex-col p-0;
   }
-  .import-export-section { 
+  .frameworks-section,
+  .data-management-section { 
     @apply mt-6 pt-4 border-t border-gray-200;
   }
-  .import-export-section h3 { 
-    @apply mb-4 text-lg font-semibold text-gray-900;
+  .frameworks-section h3,
+  .data-management-section h3 { 
+    @apply text-lg font-semibold text-gray-900;
   }
-  .import-export-group {
-    @apply flex flex-col gap-4; 
+  .frameworks-header {
+    @apply flex items-center gap-3 mb-2;
   }
-  .import-export-item { 
-    @apply flex flex-col gap-2;
+  .data-management-header {
+    @apply flex items-center gap-3 mb-2; /* 見出しより少し間を開けて右側に配置 */
   }
-  .import-export-item label {
-    @apply font-medium text-sm text-gray-900;
-  }
-  .import-export-item .description {
-    @apply text-xs text-gray-600 m-0; 
+  .inline-description {
+    @apply text-xs text-gray-600; /* 見出しより小さい文字 */
   }
 
   .feedback-link {

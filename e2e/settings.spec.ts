@@ -97,7 +97,8 @@ test.describe('インポート・エクスポート機能', () => {
     ],
     settings: {
       defaultFrameworkId: 'framework-1',
-      version: '1.0.2'
+      version: '1.0.2',
+      language: 'ja'
     }
   };
 
@@ -118,6 +119,8 @@ test.describe('インポート・エクスポート機能', () => {
     await page.goto(extensionUrl('popup.html'));
     await page.waitForSelector('[data-testid="nexus-prompt"]');
     await page.click('button:has-text("設定")');
+    await page.click('[data-testid="open-data-management-link"]');
+    await page.waitForSelector('[data-testid="export-button"]');
 
     const downloadPromise = page.waitForEvent('download');
 
@@ -139,6 +142,8 @@ test.describe('インポート・エクスポート機能', () => {
     await page.goto(extensionUrl('popup.html'));
     await page.waitForSelector('[data-testid="nexus-prompt"]');
     await page.click('button:has-text("設定")');
+    await page.click('[data-testid="open-data-management-link"]');
+    await page.waitForSelector('[data-testid="import-file-input"]', { state: 'attached' });
 
     // ZIPを生成（frameworks/ と prompts/ のフロントマターJSONのみ）
     const zip = new JSZip();
@@ -186,6 +191,8 @@ test.describe('インポート・エクスポート機能', () => {
     await page.goto(extensionUrl('popup.html'));
     await page.waitForSelector('[data-testid="nexus-prompt"]');
     await page.click('button:has-text("設定")');
+    await page.click('[data-testid="open-data-management-link"]');
+    await page.waitForSelector('[data-testid="import-file-input"]', { state: 'attached' });
 
     const invalidFileContent = '{ invalid zip content }';
     await page.setInputFiles('[data-testid="import-file-input"]', {
@@ -211,6 +218,8 @@ test.describe('インポート・エクスポート機能', () => {
     await page.goto(extensionUrl('popup.html'));
     await page.waitForSelector('[data-testid="nexus-prompt"]');
     await page.click('button:has-text("設定")');
+    await page.click('[data-testid="open-data-management-link"]');
+    await page.waitForSelector('[data-testid="import-file-input"]', { state: 'attached' });
 
     // 単純なZIP（中身は空でも可）を渡しても、ダイアログでキャンセルするため状態は変わらない
     const zip = new JSZip();
