@@ -1,8 +1,8 @@
 <script lang="ts">
   import { FileImportExportService } from '../services/file-import-export';
-  import { showToast } from '../stores';
+  import { showToast, plan } from '../stores';
   import { useNavHistory } from '../actions/navigation';
-
+  
   let isImportExportLoading = $state(false);
 
   const fileImportExportService = new FileImportExportService();
@@ -55,7 +55,7 @@
     try {
       isImportExportLoading = true;
       const arrayBuffer = await file.arrayBuffer();
-      await fileImportExportService.import(arrayBuffer);
+      await fileImportExportService.import(arrayBuffer, $plan);
       
       showToast('フレームワークデータをインポートしました', 'success');
     } catch (error) {

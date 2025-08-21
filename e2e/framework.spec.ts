@@ -95,7 +95,7 @@ test.describe('フレームワーク管理テスト', () => {
       new Date(testData.frameworks[0].updatedAt).getTime()
     );
 
-    await page.reload();
+    await page.click('.js-link-back');
     await page.waitForSelector('[data-testid="nexus-prompt"]');
     await page.click('button:has-text("設定")');
     await page.waitForSelector('[data-testid="open-frameworks-link"]');

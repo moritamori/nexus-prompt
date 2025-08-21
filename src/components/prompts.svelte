@@ -17,8 +17,8 @@
   let { promptSelectionReset } = $props();
 
   // Derived
-  const promptListSorted = $derived(
-    [...($appData?.prompts ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  const promptsOrdered = $derived(
+    [...($appData?.prompts ?? [])].sort((a, b) => a.order - b.order)
   );
 
   // Derived: 環境フラグはストアから参照
@@ -29,15 +29,15 @@
 
   // 親の onMount 後に viewContext が設定されるため、変化を一度だけ拾う
   $effect(() => {
-    if ($isInitialized && !handledSidepanelInit && $viewContext === 'sidepanel' && $snapshotData?.editingTarget.type === 'prompt') {
+    if ($isInitialized && !handledSidepanelInit && $viewContext === 'sidepanel' && $snapshotData?.editPrompt?.id) {
       handledSidepanelInit = true;
-      editingPromptId = $snapshotData.editingTarget.id || null;
+      editingPromptId = $snapshotData.editPrompt.id || null;
       view = 'edit';
       (async () => {
         try {
-          await storageService.clearEditingTarget();
+          await storageService.saveEditPrompt(null);
         } finally {
-          snapshotData.update(current => current ? { ...current, editingTarget: { type: null, id: '' } } : null);
+          snapshotData.update(current => current ? { ...current, editPrompt: { id: null } } : null);
         }
       })();
     }
@@ -57,11 +57,7 @@
 
     try {
       await storageService.saveActiveTab('prompts');
-      if (targetId === null) {
-        await storageService.saveEditingTarget('prompt', '');
-      } else {
-        await storageService.saveEditingTarget('prompt', targetId);
-      }
+      await storageService.saveEditPrompt(targetId);
 
       const currentWindow = await chrome.windows.getCurrent();
       await chrome.sidePanel.open({ windowId: currentWindow.id! });
@@ -82,7 +78,7 @@
 
   // 新規作成時にサイドパネルでエディタを開く
   async function openNewEditorInSidePanel(): Promise<void> {
-    if ($entitlements.isFree && promptListSorted.length >= MAX_PROMPT_COUNT) {
+    if ($entitlements.isFree && promptsOrdered.length >= MAX_PROMPT_COUNT) {
       showToast(`フリープランではプロンプトは${MAX_PROMPT_COUNT}個までしか作成できません。プランをアップグレードしてください。`, 'error');
       return;
     }
@@ -142,15 +138,15 @@
         <button id="newPromptButton" class="primary-button" data-testid="new-prompt-button" onclick={openNewEditorInSidePanel}>新規作成</button>
       </div>
       <div id="promptList" data-testid="prompt-list" class="prompt-list {$viewContext === 'popup' ? 'popup-view' : ''}">
-        {#each promptListSorted as prompt (prompt.id)}
+        {#each promptsOrdered as prompt (prompt.id)}
         <div class="prompt-item js-prompt-item" data-testid="prompt-item" in:fly={{ y: 20, duration: 250 }} animate:flip>
           <div class="prompt-info">
             <h4>{prompt.content.name}</h4>
             <p>{prompt.content.template.substring(0, 45)}...</p>
           </div>
           <div class="prompt-actions">
-            <button class="sort-button" aria-label="上へ" title="上へ" onclick={() => movePrompt(prompt.id, 'up')} disabled={promptListSorted[0]?.id === prompt.id}>↑</button>
-            <button class="sort-button" aria-label="下へ" title="下へ" onclick={() => movePrompt(prompt.id, 'down')} disabled={promptListSorted[promptListSorted.length - 1]?.id === prompt.id}>↓</button>
+            <button class="sort-button" aria-label="上へ" title="上へ" onclick={() => movePrompt(prompt.id, 'up')} disabled={promptsOrdered[0]?.id === prompt.id}>↑</button>
+            <button class="sort-button" aria-label="下へ" title="下へ" onclick={() => movePrompt(prompt.id, 'down')} disabled={promptsOrdered[promptsOrdered.length - 1]?.id === prompt.id}>↓</button>
             <button class="edit-button" onclick={() => openInSidePanel(prompt.id)} disabled={deletingIds.has(prompt.id)}>編集</button>
             <button class="delete-button" onclick={() => deletePrompt(prompt.id)} disabled={deletingIds.has(prompt.id)}>{deletingIds.has(prompt.id) ? '削除中...' : '削除'}</button>
           </div>

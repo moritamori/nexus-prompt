@@ -263,26 +263,23 @@ export class StorageService {
     }
     // デフォルトのスナップショットを初期化して保存
     const defaultSnapshot: SnapshotData = {
-      userPrompt: '',
-      selectedPromptId: '',
-      resultArea: '',
-      selectedModelId: '',
+      promptImprovement: {
+        userPrompt: '',
+        selectedPromptId: '',
+        resultArea: '',
+        selectedModelId: '',
+      },
+      editPrompt: { id: '' },
       activeTab: 'main',
-      editingTarget: { type: null, id: '' },
+      activeScreen: null,
     };
     await this.saveSnapshot(defaultSnapshot);
     return defaultSnapshot;
   }
 
-  async clearEditingTarget(): Promise<void> {
+  async saveEditPrompt(id: string | null): Promise<void> {
     const data = await this.getSnapshot();
-    data.editingTarget = { type: null, id: '' };
-    await this.saveSnapshot(data);
-  }
-
-  async saveEditingTarget(type: 'prompt' | 'framework', id: string): Promise<void> {
-    const data = await this.getSnapshot();
-    data.editingTarget = { type, id };
+    data.editPrompt = { id };
     await this.saveSnapshot(data);
   }
 

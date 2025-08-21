@@ -602,10 +602,15 @@ describe('StorageService', () => {
 
     it('空のスナップショットデータでも保存できる', async () => {
       const emptySnapshotData = createMockSnapshotData({
-        userPrompt: '',
-        selectedPromptId: '',
-        resultArea: '',
-        selectedModelId: ''
+        promptImprovement: {
+          userPrompt: '',
+          selectedPromptId: '',
+          resultArea: '',
+          selectedModelId: ''
+        },
+        editPrompt: { id: '' },
+        activeTab: 'main',
+        activeScreen: null,
       });
 
       mockChromeStorage.local.set.mockResolvedValue(undefined);
@@ -649,12 +654,15 @@ describe('StorageService', () => {
 
       expect(mockChromeStorage.local.get).toHaveBeenCalledWith([SNAPSHOT_STORAGE_KEY]);
       expect(result).toStrictEqual({
-        userPrompt: '',
-        selectedPromptId: '',
-        resultArea: '',
-        selectedModelId: '',
+        promptImprovement: {
+          userPrompt: '',
+          selectedPromptId: '',
+          resultArea: '',
+          selectedModelId: '',
+        },
+        editPrompt: { id: '' },
         activeTab: 'main',
-        editingTarget: { type: null, id: '' },
+        activeScreen: null,
       });
     });
 

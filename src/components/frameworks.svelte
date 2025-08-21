@@ -89,7 +89,7 @@
 </script>
 
 <div class="frameworks">
-  <button type="button" class="link-back" data-testid="back-to-list-button" onclick={backToSettingsButtonHandler}>← 設定へ戻る</button>
+  <button type="button" class="link-back js-link-back" data-testid="back-to-list-button" onclick={backToSettingsButtonHandler}>← 設定へ戻る</button>
 
   <div class="form-group">
     <div class="label-with-reset">

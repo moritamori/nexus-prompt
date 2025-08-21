@@ -71,11 +71,16 @@ export const createMockAppData = (overrides: Partial<AppData> = {}): AppData => 
 });
 
 export const createMockSnapshotData = (overrides: Partial<SnapshotData> = {}): SnapshotData => ({
-  userPrompt: 'ユーザープロンプト',
-  selectedPromptId: 'prompt1',
-  resultArea: 'テスト結果',
-  selectedModelId: 'model1',
+  promptImprovement: {
+    userPrompt: 'ユーザープロンプト',
+    selectedPromptId: 'prompt1',
+    resultArea: 'テスト結果',
+    selectedModelId: 'model1',
+  },
+  editPrompt: { 
+    id: 'prompt1' 
+  },
   activeTab: 'main',
-  editingTarget: { type: 'prompt', id: 'prompt1' },
+  activeScreen: null,
   ...overrides,
 });

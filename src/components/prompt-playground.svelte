@@ -39,12 +39,10 @@
   let recordInputs = $state<Record<string, unknown>>({});
   let invalidInputs = $state<Record<string, boolean>>({});
 
-  function handleChildInputChange(name: string, value: string): void {
-    recordInputs = { ...recordInputs, [name]: value };
-    if (invalidInputs[name]) {
-      invalidInputs = { ...invalidInputs, [name]: false };
-    }
-  }
+  // Derived
+  const promptsOrdered = $derived(
+    [...($appData?.prompts ?? [])].sort((a, b) => a.order - b.order)
+  );
 
   const selectedPrompt = $derived.by((): Prompt | undefined => {
     const prompts = $appData?.prompts || [];
@@ -78,6 +76,13 @@
       return ALIGN_METHOD_TOP_BOTTOM;
     }
   });
+
+  function handleChildInputChange(name: string, value: string): void {
+    recordInputs = { ...recordInputs, [name]: value };
+    if (invalidInputs[name]) {
+      invalidInputs = { ...invalidInputs, [name]: false };
+    }
+  }
 
   // セレクト変更時に該当プロンプトのテンプレートをコピー
   $effect(() => {
@@ -157,7 +162,7 @@
         onchange={handlePromptSelectChange}
         disabled={isLoading}>
         <option value="">選択してください</option>
-        {#each $appData?.prompts || [] as prompt}
+        {#each promptsOrdered as prompt}
           <option value={prompt.id}>
             {prompt.content.name || prompt.content.template.substring(0, 30) + '...'}
           </option>

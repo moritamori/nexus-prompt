@@ -12,13 +12,18 @@
   let { switchTab, selectedPromptIdFromParent } = $props();
 
   // Local state
-  const userPrompt = writable($snapshotData?.userPrompt || '');
+  const userPrompt = writable($snapshotData?.promptImprovement?.userPrompt || '');
   const selectedPromptId = writable(selectedPromptIdFromParent);
-  const selectedModelId = writable($snapshotData?.selectedModelId || '');
-  const resultArea = writable($snapshotData?.resultArea || '');
+  const selectedModelId = writable($snapshotData?.promptImprovement?.selectedModelId || '');
+  const resultArea = writable($snapshotData?.promptImprovement?.resultArea || '');
   let isLoading = $state(false);
   let isThrottled = $state(false);
   let hasPendingChanges = $state(false);
+
+  // Derived
+  const promptsOrdered = $derived(
+    [...($appData?.prompts ?? [])].sort((a, b) => a.order - b.order)
+  );
 
   // コンポーネントがマウントされた時に、保存されている下書きを読み込む
   onMount(async () => {
@@ -209,7 +214,7 @@
           disabled={isLoading}
           oninput={handleInput}>
           <option value="">選択してください</option>
-          {#each $appData?.prompts || [] as prompt}
+          {#each promptsOrdered as prompt}
             <option value={prompt.id}>
               {prompt.content.name || prompt.content.template.substring(0, 30) + '...'}
             </option>

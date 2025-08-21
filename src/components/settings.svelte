@@ -1,12 +1,11 @@
 <script lang="ts">
   import { storageService } from '../services/storage';
-  import { showToast } from '../stores';
+  import { showToast, snapshotData } from '../stores';
   import Frameworks from './frameworks.svelte';
-  import { useForwardToDetail, useForwardToScreen } from '../actions/navigation';
+  import { useForwardToScreen } from '../actions/navigation';
   import DataManagement from './data-management.svelte';
 
   // Local state
-  let view = $state<'settings' | 'api-key' | 'frameworks' | 'data-management'>('settings');
   let geminiApiKey = $state('');
   let openaiApiKey = $state('');
   let anthropicApiKey = $state('');
@@ -20,7 +19,6 @@
   let { promptSelectionReset } = $props();
 
   // Services
-
   $effect(() => {
     (async () => {
       if (initialized) return;
@@ -66,22 +64,16 @@
     }
   }
 
-  // データ管理は専用画面に移動
-
-  useForwardToDetail((_id: string | null) => {
-    view = 'frameworks';
-  });
-
   // 履歴の「進む」で settings配下のサブ画面を復元
   useForwardToScreen((screen: string) => {
     if (screen === 'frameworks' || screen === 'data-management') {
-      view = screen as any;
+      snapshotData.update(current => current ? { ...current, activeScreen: screen as any } : null);
     }
   }, 'settings');
 </script>
 
 <div class="settings-container">
-  {#if view === 'settings'}
+  {#if $snapshotData?.activeScreen === null}
     <!-- APIキーセクション -->
     <div class="setting-api-key-section">
       <div class="form-group">
@@ -153,7 +145,7 @@
         href="#data-management"
         class="text-blue-500"
         data-testid="open-data-management-link"
-        onclick={(e) => { e.preventDefault(); view = 'data-management'; }}
+        onclick={(e) => { e.preventDefault(); snapshotData.update(current => current ? { ...current, activeScreen: 'data-management' } : null); }}
       >
         データ管理を開く
       </a>
@@ -169,7 +161,7 @@
         href="#frameworks"
         class="text-blue-500"
         data-testid="open-frameworks-link"
-        onclick={(e) => { e.preventDefault(); view = 'frameworks'; }}
+        onclick={(e) => { e.preventDefault(); snapshotData.update(current => current ? { ...current, activeScreen: 'frameworks' } : null); }}
       >
         フレームワーク管理を開く
       </a>
@@ -179,10 +171,10 @@
       <p>不具合の報告や機能のご要望は、ぜひこちらからお寄せください。</p>
       <a href="https://docs.google.com/forms/d/1GnBes2W30efxIYPVCICifyJRf6Mm1oFZf9zwV6tXcT8/viewform" target="_blank" rel="noopener noreferrer">フィードバックを送る</a>
     </div>
-  {:else if view === 'frameworks'}
-    <Frameworks promptSelectionReset={promptSelectionReset} backToSettings={() => view = 'settings'} />
-  {:else if view === 'data-management'}
-    <DataManagement backToSettings={() => view = 'settings'} />
+  {:else if $snapshotData?.activeScreen === 'frameworks'}
+    <Frameworks promptSelectionReset={promptSelectionReset} backToSettings={() => snapshotData.update(current => current ? { ...current, activeScreen: null } : null)} />
+  {:else if $snapshotData?.activeScreen === 'data-management'}
+    <DataManagement backToSettings={() => snapshotData.update(current => current ? { ...current, activeScreen: null } : null)} />
   {/if}
 </div>
 

@@ -1,6 +1,7 @@
 import { writable, derived, type Writable } from 'svelte/store';
 import type { AppData, SnapshotData, MessageType } from './types';
 import { storageService } from './services/storage';
+import { loadTranslations } from './lib/translations/translations';
 
 /**
  * ストレージと同期するカスタムストアのインターフェース。
@@ -101,16 +102,20 @@ export function refreshCapabilities(): void {
 export async function initializeStores(): Promise<void> {
   // 初期化開始
   isInitialized.set(false);
+  let data: AppData | null = null;
   try {
-    const data = await storageService.getAppData();
+    data = await storageService.getAppData();
     appData.setFromStorage(data);
   } catch (e) {
     console.warn('AppDataが未初期化のため初期化します:', e);
     await storageService.initializeAppData();
-    appData.setFromStorage(await storageService.getAppData());
+    data = await storageService.getAppData();
+    appData.setFromStorage(data);
   }
 
   snapshotData.setFromStorage(await storageService.getSnapshot());
+
+  loadTranslations((data as unknown as AppData).settings.language ?? "ja", "/"); 
   // 初期化完了
   isInitialized.set(true);
 }

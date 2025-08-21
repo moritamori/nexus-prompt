@@ -51,15 +51,17 @@ export interface AppData {
 }
 
 export interface SnapshotData {
-  userPrompt: string;
-  selectedPromptId: string;
-  resultArea: string;
-  selectedModelId: string;
-  activeTab: 'main' | 'prompt-improvement' | 'prompts' | 'settings';
-  editingTarget: {
-    type: 'prompt' | 'framework' | null;
-    id: string;
+  promptImprovement: {
+    userPrompt: string;
+    selectedPromptId: string;
+    resultArea: string;
+    selectedModelId: string;
   };
+  editPrompt: {
+    id: string | null;
+  };
+  activeTab: 'main' | 'prompt-improvement' | 'prompts' | 'settings';
+  activeScreen: 'frameworks' | 'data-management' | null;
 }
 
 export interface GeminiResponse {
