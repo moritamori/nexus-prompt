@@ -102,16 +102,7 @@
 
   function handlePromptSelectChange(): void {
     if (!selectedPrompt) return;
-    const validNames = new Set((selectedPrompt.content.inputs || []).map((i) => i.name));
-    const nextInputs: Record<string, unknown> = {};
-    validNames.forEach((name) => {
-      if (Object.prototype.hasOwnProperty.call(recordInputs, name)) {
-        nextInputs[name] = recordInputs[name];
-      } else {
-        nextInputs[name] = '';
-      }
-    });
-    recordInputs = nextInputs;
+    recordInputs = {};
     invalidInputs = {};
   }
 

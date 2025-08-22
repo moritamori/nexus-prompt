@@ -115,7 +115,7 @@ export async function initializeStores(): Promise<void> {
 
   snapshotData.setFromStorage(await storageService.getSnapshot());
 
-  loadTranslations((data as unknown as AppData).settings.language ?? "ja", "/"); 
+  await loadTranslations((data as unknown as AppData).settings.language ?? "ja", "/"); 
   // 初期化完了
   isInitialized.set(true);
 }
