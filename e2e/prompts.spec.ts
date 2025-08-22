@@ -21,6 +21,7 @@ test.describe('プロンプトテンプレート管理テスト', () => {
             frameworkRef: frameworkId 
           }, 
           order: 1, 
+          shared: false,
           createdAt: new Date().toISOString(), 
           updatedAt: new Date().toISOString() 
         },
@@ -36,6 +37,7 @@ test.describe('プロンプトテンプレート管理テスト', () => {
             frameworkRef: frameworkId
           }, 
           order: 2, 
+          shared: false,
           createdAt: new Date().toISOString(), 
           updatedAt: new Date().toISOString() 
         }

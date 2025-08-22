@@ -7,6 +7,7 @@
   import { copyToClipboard } from '../utils/copy-to-clipboard';
   import { viewContext } from '../stores';
   import { scrollToBottom } from '../actions/window';
+  import { createSnapshotManager } from '../actions/snapshot';
 
   // Event handler, Props
   let { switchTab, selectedPromptIdFromParent } = $props();
@@ -17,17 +18,14 @@
   const selectedModelId = writable($snapshotData?.promptImprovement?.selectedModelId || '');
   const resultArea = writable($snapshotData?.promptImprovement?.resultArea || '');
   let isLoading = $state(false);
-  let isThrottled = $state(false);
-  let hasPendingChanges = $state(false);
 
   // Derived
   const promptsOrdered = $derived(
     [...($appData?.prompts ?? [])].sort((a, b) => a.order - b.order)
   );
 
-  // コンポーネントがマウントされた時に、保存されている下書きを読み込む
   onMount(async () => {
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('visibilitychange', snapshotManager.handleVisibilityChange);
   });
 
   async function improvePrompt(): Promise<void> {
@@ -123,47 +121,22 @@
   const saveSnapshot = async () => {
     snapshotData?.update(current => current ? {
       ...current,
-      userPrompt: $userPrompt,
-      selectedPromptId: $selectedPromptId,
-      resultArea: $resultArea,
-      selectedModelId: $selectedModelId
-    } : current);
-    hasPendingChanges = false;
-  };
-
-  const throttledSave = () => {
-    if (isThrottled) {
-      hasPendingChanges = true;
-      return;
-    }
-
-    isThrottled = true;
-    void saveSnapshot(); // 先頭保存
-
-    setTimeout(() => {
-      isThrottled = false;
-      if (hasPendingChanges) {
-        void saveSnapshot(); // 末尾保存（取りこぼし防止）
+      promptImprovement: {
+        userPrompt: $userPrompt,
+        selectedPromptId: $selectedPromptId,
+        resultArea: $resultArea,
+        selectedModelId: $selectedModelId
       }
-    }, 500);
+    } : current);
+    snapshotManager.hasPendingChanges = false;
   };
 
-  // 入力があるたびに呼び出される関数（ローカル状態は bind で更新されるため、保存のみスロットリング）
-  const handleInput = () => {
-    throttledSave();
-  };
-
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === 'hidden') {
-      saveSnapshot();
-    }
-  };
+  // スナップショット管理の初期化
+  const snapshotManager = createSnapshotManager(saveSnapshot);
 
   onDestroy(() => {
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
-    if (hasPendingChanges) {
-      saveSnapshot();
-    }
+    document.removeEventListener('visibilitychange', snapshotManager.handleVisibilityChange);
+    snapshotManager.cleanup();
   });
 </script>
 
@@ -175,7 +148,7 @@
         data-testid="model-select"
         class="model-select"
         bind:value={$selectedModelId}
-        oninput={handleInput}
+        oninput={snapshotManager.handleInput}
         disabled={isLoading}>
         <option value="">実行モデルを選択してください</option>
         {#each $appData?.providers || [] as provider}
@@ -201,7 +174,7 @@
           bind:value={$userPrompt}
           disabled={isLoading}
           use:autosize={{ fixedRows: 13 }}
-          oninput={handleInput}
+          oninput={snapshotManager.handleInput}
           placeholder="改善したいプロンプトを入力してください">
         </textarea>
       </div>
@@ -212,7 +185,7 @@
           data-testid="prompt-select"
           bind:value={$selectedPromptId}
           disabled={isLoading}
-          oninput={handleInput}>
+          oninput={snapshotManager.handleInput}>
           <option value="">選択してください</option>
           {#each promptsOrdered as prompt}
             <option value={prompt.id}>
@@ -236,7 +209,7 @@
           class="result-area"
           bind:value={$resultArea}
           use:autosize={{ fixedRows: 17 }}
-          oninput={handleInput}
+          oninput={snapshotManager.handleInput}
           placeholder="改善結果がここに表示されます">
         </textarea>
       </div>
@@ -295,20 +268,5 @@
 
   .label-with-improved-prompt {
     @apply p-[5];
-  }
-  .label-with-reset {
-    @apply flex justify-between items-center;
-  }
-  .reset-button {
-    @apply px-3 py-1 border border-red-500 rounded-md text-sm font-medium text-red-500 bg-transparent cursor-pointer transition-all duration-200;
-  }
-  .reset-button:hover {
-    @apply bg-red-500 text-white -translate-y-px shadow-sm;
-  }
-  .reset-button:disabled {
-    @apply opacity-50 cursor-not-allowed -translate-y-0 shadow-none;
-  }
-  .reset-button:disabled:hover {
-    @apply bg-transparent text-red-500;
   }
 </style>

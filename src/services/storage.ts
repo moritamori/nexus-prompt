@@ -263,7 +263,12 @@ export class StorageService {
     }
     // デフォルトのスナップショットを初期化して保存
     const defaultSnapshot: SnapshotData = {
-      promptImprovement: {
+      promptPlayground: {
+        userPrompt: '',
+        selectedPromptId: '',
+        inputKeyValues: {},
+      },
+     promptImprovement: {
         userPrompt: '',
         selectedPromptId: '',
         resultArea: '',

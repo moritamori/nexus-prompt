@@ -654,6 +654,11 @@ describe('StorageService', () => {
 
       expect(mockChromeStorage.local.get).toHaveBeenCalledWith([SNAPSHOT_STORAGE_KEY]);
       expect(result).toStrictEqual({
+        promptPlayground: {
+          selectedPromptId: '',
+          userPrompt: '',
+          inputKeyValues: {},
+        },
         promptImprovement: {
           userPrompt: '',
           selectedPromptId: '',

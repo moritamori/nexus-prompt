@@ -51,6 +51,11 @@ export interface AppData {
 }
 
 export interface SnapshotData {
+  promptPlayground: {
+    selectedPromptId: string;
+    userPrompt: string;
+    inputKeyValues: Record<string, unknown>;
+  };
   promptImprovement: {
     userPrompt: string;
     selectedPromptId: string;

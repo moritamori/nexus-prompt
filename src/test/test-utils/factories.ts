@@ -71,6 +71,11 @@ export const createMockAppData = (overrides: Partial<AppData> = {}): AppData => 
 });
 
 export const createMockSnapshotData = (overrides: Partial<SnapshotData> = {}): SnapshotData => ({
+  promptPlayground: {
+    selectedPromptId: 'prompt1',
+    userPrompt: 'ユーザープロンプト',
+    inputKeyValues: {},
+  },
   promptImprovement: {
     userPrompt: 'ユーザープロンプト',
     selectedPromptId: 'prompt1',

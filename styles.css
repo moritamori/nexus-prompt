@@ -183,6 +183,22 @@
     color: #0c5460;
     border: 1px solid #bee5eb;
   }
+
+  .label-with-reset {
+    @apply flex justify-between items-center;
+  }
+  .reset-button {
+    @apply px-3 py-1 border border-red-500 rounded-md text-sm font-medium text-red-500 bg-transparent cursor-pointer transition-all duration-200;
+  }
+  .reset-button:hover {
+    @apply bg-red-500 text-white -translate-y-px shadow-sm;
+  }
+  .reset-button:disabled {
+    @apply opacity-50 cursor-not-allowed -translate-y-0 shadow-none;
+  }
+  .reset-button:disabled:hover {
+    @apply bg-transparent text-red-500;
+  }
 }
 
 @layer utilities {

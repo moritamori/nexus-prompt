@@ -71,7 +71,7 @@
   }
 
   async function resetPromptSelection(): Promise<void> {
-    snapshotData.update((current: SnapshotData | null) => current ? { ...current, selectedPromptId: '' } : null);
+    snapshotData.update((current: SnapshotData | null) => current ? { ...current, promptImprovement: { ...current.promptImprovement, selectedPromptId: '' } } : null);
   }
 
   async function handlePromptSelectionReset(): Promise<void> {
@@ -117,7 +117,7 @@
     <!-- プロンプト改善 -->
     {#if $snapshotData.activeTab === 'prompt-improvement'}
     <div id="main" class="tab-content active">
-      <PromptImprovement switchTab={switchTab} selectedPromptIdFromParent={$snapshotData?.editPrompt.id || ''} />
+      <PromptImprovement switchTab={switchTab} selectedPromptIdFromParent={$snapshotData?.promptImprovement?.selectedPromptId || ''} />
     </div>
     {/if}
 

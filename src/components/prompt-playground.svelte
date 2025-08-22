@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { appData, showToast } from '../stores';
+  import { appData, showToast, snapshotData } from '../stores';
   import { autosize } from '../actions/autosize';
   import { viewContext } from '../stores';
   import { copyToClipboard } from '../utils/copy-to-clipboard';
@@ -8,6 +8,8 @@
   import { hasRemainingPlaceholders } from '../promptops/dsl/prompt/linter';
   import { buildPrompt } from '../promptops/dsl/prompt/builder';
   import PromptPlaygroundInput from './prompt-playground-input.svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { createSnapshotManager } from '../actions/snapshot';
 
   // constants
   const ALIGN_METHOD_FULL = 'full' as const;
@@ -33,11 +35,11 @@
   const INPUT_STRING_MIN_ROWS = 2 as const;
 
   // Local state
-  let selectedModelId = $state('');
-  let isLoading = $state(false);
-  let userPrompt = $state('');
-  let recordInputs = $state<Record<string, unknown>>({});
+  let selectedPromptId = $state($snapshotData?.promptPlayground?.selectedPromptId || '');
+  let userPrompt = $state($snapshotData?.promptPlayground?.userPrompt || '');
+  let inputKeyValues = $state<Record<string, unknown>>($snapshotData?.promptPlayground?.inputKeyValues || {});
   let invalidInputs = $state<Record<string, boolean>>({});
+  let isLoading = $state(false);
 
   // Derived
   const promptsOrdered = $derived(
@@ -46,7 +48,7 @@
 
   const selectedPrompt = $derived.by((): Prompt | undefined => {
     const prompts = $appData?.prompts || [];
-    return prompts.find((p) => p.id === selectedModelId);
+    return prompts.find((p) => p.id === selectedPromptId);
   });
 
   const complexity = $derived.by(() => {
@@ -78,15 +80,16 @@
   });
 
   function handleChildInputChange(name: string, value: string): void {
-    recordInputs = { ...recordInputs, [name]: value };
+    inputKeyValues = { ...inputKeyValues, [name]: value };
     if (invalidInputs[name]) {
       invalidInputs = { ...invalidInputs, [name]: false };
     }
+    snapshotManager.handleInput();
   }
 
   // セレクト変更時に該当プロンプトのテンプレートをコピー
   $effect(() => {
-    const id = selectedModelId;
+    const id = selectedPromptId;
     if (!id) {
       userPrompt = '';
       return;
@@ -98,12 +101,15 @@
     if (template) {
       userPrompt = template;
     }
+    // 値の変更をスナップショット対象に反映
+    snapshotManager.handleInput();
   });
 
   function handlePromptSelectChange(): void {
     if (!selectedPrompt) return;
-    recordInputs = {};
+    inputKeyValues = {};
     invalidInputs = {};
+    snapshotManager.handleInput();
   }
 
   function copyUserPrompt(): void {
@@ -120,7 +126,7 @@
     let hasError = false;
     const nextInvalid: Record<string, boolean> = {};
     selectedPrompt.content.inputs.forEach((input) => {
-      const val = recordInputs[input.name];
+      const val = inputKeyValues[input.name];
       const invalid = Boolean(input.required && (val === '' || val === undefined || val === null));
       nextInvalid[input.name] = invalid;
       if (invalid) hasError = true;
@@ -131,13 +137,62 @@
       return 
     }
 
-    const builtPrompt = buildPrompt(userPrompt, recordInputs);
+    const builtPrompt = buildPrompt(userPrompt, inputKeyValues);
     if (hasRemainingPlaceholders(builtPrompt)) {
       showToast('プレースホルダーが残っています', 'error');
       return;
     }
     copyToClipboard(builtPrompt, null, showToast);
   }
+
+  function resetFields(): void {
+    selectedPromptId = '';
+    userPrompt = '';
+    inputKeyValues = {};
+    invalidInputs = {};
+    snapshotData?.update((current) =>
+      current
+        ? {
+            ...current,
+            promptPlayground: {
+              selectedPromptId,
+              userPrompt,
+              inputKeyValues,
+            },
+          }
+        : current
+    );
+    showToast('フィールドをリセットしました', 'success');
+  }
+
+  // ストア更新時に自動保存されるため、明示保存は不要
+  const saveSnapshot = async () => {
+    snapshotData?.update((current) =>
+      current
+        ? {
+            ...current,
+            promptPlayground: {
+              selectedPromptId,
+              userPrompt,
+              inputKeyValues
+            }
+          }
+        : current
+    );
+    snapshotManager.hasPendingChanges = false;
+  };
+
+  // スナップショット管理の初期化
+  const snapshotManager = createSnapshotManager(saveSnapshot);
+
+  onMount(() => {
+    document.addEventListener('visibilitychange', snapshotManager.handleVisibilityChange);
+  });
+
+  onDestroy(() => {
+    document.removeEventListener('visibilitychange', snapshotManager.handleVisibilityChange);
+    snapshotManager.cleanup();
+  });
 </script>
 
 <div 
@@ -145,12 +200,16 @@
   class:align-top-bottom={alignMethod === ALIGN_METHOD_TOP_BOTTOM}>
   <div class="top-layout">
     <div class="form-group">
-      <label for="promptSelect">登録済みLLMプロンプト</label>
+      <div class="label-with-reset">
+        <label for="promptSelect">登録済みLLMプロンプト</label>
+        <button class="reset-button" onclick={resetFields} disabled={isLoading}>リセット</button>
+      </div>
       <select 
         id="promptSelect" 
         data-testid="prompt-select"
-        bind:value={selectedModelId}
+        bind:value={selectedPromptId}
         onchange={handlePromptSelectChange}
+        oninput={snapshotManager.handleInput}
         disabled={isLoading}>
         <option value="">選択してください</option>
         {#each promptsOrdered as prompt}
@@ -174,6 +233,7 @@
             bind:value={userPrompt}
             disabled={isLoading}
             use:autosize={{ maxRows: 20, minRows: 10, fixedRows: $viewContext === 'popup' ? 8 : undefined }}
+            oninput={snapshotManager.handleInput}
             placeholder="登録済みLLMプロンプトを選択後、プロンプトが表示されます。適宜編集してください。">
           </textarea>
         {:else}
@@ -183,6 +243,7 @@
             bind:value={userPrompt}
             disabled={isLoading}
             use:autosize={{ maxRows: 20, minRows: 10, fixedRows: $viewContext === 'popup' ? userPromptRows : undefined }}
+            oninput={snapshotManager.handleInput}
             placeholder="登録済みLLMプロンプトを選択後、プロンプトが表示されます。適宜編集してください。">
           </textarea>
         {/if}
@@ -195,7 +256,7 @@
             <PromptPlaygroundInput 
               {input} 
               {inputStringRows} 
-              value={recordInputs[input.name] as string}
+              value={inputKeyValues[input.name] as string}
               onchange={handleChildInputChange}
               isInvalid={invalidInputs[input.name] === true}
             />
@@ -209,7 +270,7 @@
             <PromptPlaygroundInput 
               {input} 
               {inputStringRows} 
-              value={recordInputs[input.name] as string}
+              value={inputKeyValues[input.name] as string}
               onchange={handleChildInputChange}
               isInvalid={invalidInputs[input.name] === true}
             />
