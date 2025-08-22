@@ -24,6 +24,11 @@
     [...($appData?.prompts ?? [])].sort((a, b) => a.order - b.order)
   );
 
+  // 親のスナップショットから渡された選択値をローカルストアに同期
+  $effect(() => {
+    selectedPromptId.set(selectedPromptIdFromParent);
+  });
+
   onMount(async () => {
     document.addEventListener('visibilitychange', snapshotManager.handleVisibilityChange);
   });
@@ -44,7 +49,7 @@
     const selectedProviderName = selectedOption.getAttribute('data-provider-name') || '';
     const selectedModelName = selectedOption.getAttribute('data-model-name') || '';
 
-    const selectedPrompt = $appData?.prompts.find(p => p.id === $selectedPromptId);
+    const selectedPrompt = $appData?.prompts?.find(p => p.id === $selectedPromptId);
 
     if (!selectedPrompt) {
       showToast('選択されたプロンプトが見つかりません', 'error');
@@ -69,7 +74,16 @@
       if (response.success) {
         const result = response.data;
         resultArea.set(result);
-        snapshotData?.update(current => current ? { ...current, userPrompt: $userPrompt, selectedPromptId: $selectedPromptId, resultArea: result, selectedModelId: $selectedModelId } : current);
+        snapshotData?.update(current => current ? {
+          ...current,
+          promptImprovement: {
+            ...current.promptImprovement,
+            userPrompt: $userPrompt,
+            selectedPromptId: $selectedPromptId,
+            resultArea: result,
+            selectedModelId: $selectedModelId
+          }
+        } : current);
         showToast('プロンプトの改善が完了しました', 'success');
         if ($viewContext === 'sidepanel') {
           scrollToBottom();
@@ -122,6 +136,7 @@
     snapshotData?.update(current => current ? {
       ...current,
       promptImprovement: {
+        ...current.promptImprovement,
         userPrompt: $userPrompt,
         selectedPromptId: $selectedPromptId,
         resultArea: $resultArea,
@@ -185,7 +200,7 @@
           data-testid="prompt-select"
           bind:value={$selectedPromptId}
           disabled={isLoading}
-          oninput={snapshotManager.handleInput}>
+          onchange={snapshotManager.handleInput}>
           <option value="">選択してください</option>
           {#each promptsOrdered as prompt}
             <option value={prompt.id}>

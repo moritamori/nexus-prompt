@@ -63,10 +63,10 @@
     }
   });
 
-  async function switchTab(tabName: string): Promise<void> {
+  async function switchTab(tabName: string, screenName: string | null = null): Promise<void> {
     snapshotData.update((current: SnapshotData | null) => {
       if (!current) return null;
-      return { ...current, activeTab: tabName as 'main' | 'prompt-improvement' | 'prompts' | 'settings' };
+      return { ...current, activeTab: tabName as 'main' | 'prompt-improvement' | 'prompts' | 'settings', activeScreen: screenName as 'frameworks' | 'data-management' | null };
     });
   }
 
