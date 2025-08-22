@@ -31,11 +31,14 @@
   ] as const);
   const COMPLEX_CLITELIA = 2 as const;
   const COMPLEX_CLITELIA2 = 4 as const;
-  const USER_PROMPT_MIN_ROWS = 15 as const;
+  const USER_PROMPT_MIN_ROWS = 14 as const;
   const INPUT_STRING_MIN_ROWS = 2 as const;
 
+  // Event handler, Props
+  let { selectedPromptIdFromParent } = $props();
+
   // Local state
-  let selectedPromptId = $state($snapshotData?.promptPlayground?.selectedPromptId || '');
+  let selectedPromptId = $state(selectedPromptIdFromParent);
   let userPrompt = $state($snapshotData?.promptPlayground?.userPrompt || '');
   let inputKeyValues = $state<Record<string, unknown>>($snapshotData?.promptPlayground?.inputKeyValues || {});
   let invalidInputs = $state<Record<string, boolean>>({});
