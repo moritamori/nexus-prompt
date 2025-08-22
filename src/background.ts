@@ -6,14 +6,31 @@ const apiServiceFactory = new ApiServiceFactory();
 
 const CONTEXT_MENU_ID = 'toggle-side-panel';
 
+async function ensureContextMenu() {
+  await new Promise<void>((resolve) => {
+    chrome.contextMenus.update(
+      CONTEXT_MENU_ID,
+      { title: 'サイドパネルを開く', contexts: ['action'] },
+      () => {
+        if (chrome.runtime.lastError) {
+          chrome.contextMenus.create(
+            { id: CONTEXT_MENU_ID, title: 'サイドパネルを開く', contexts: ['action'] },
+            () => {
+              resolve();
+            }
+          );
+        } else {
+          resolve();
+        }
+      }
+    );
+  });
+}
+
 chrome.runtime.onInstalled.addListener(async (_details) => {
   await storageService.initializeAppData();
-  
-  chrome.contextMenus.create({
-    id: CONTEXT_MENU_ID,
-    title: 'サイドパネルを開く',
-    contexts: ['action']
-  });
+
+  await ensureContextMenu();
 });
 
 (self as any)._test_initialize = () => storageService.initializeAppData();
