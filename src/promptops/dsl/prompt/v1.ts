@@ -26,6 +26,8 @@ export class PromptDslV1 {
     context: z.record(z.unknown()).optional(),
     policies: z.record(z.unknown()).optional(),
     tags: z.array(z.string()).optional().default([]),
+    // CI/CD でlocksを作成するためのフィールド
+    snapshot_with_inputs: z.array(z.unknown()).optional(),
     frameworkRef: z.string().optional(),
   }).strict();
 
