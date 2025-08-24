@@ -268,7 +268,7 @@
               aria-label={`差し込み定義（${$t(`common.input-type-${inp.type}-name`)}：${inp.name}）を編集`}
               data-testid={`input-chip-${inp.name}`}
             >
-              {$t(`common.input-type-${inp.type}-name`)}
+              {`{{${inp.name}}}`}
             </button>
           {/each}
         </div>
