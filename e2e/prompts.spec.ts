@@ -187,7 +187,7 @@ test.describe('プロンプトテンプレート管理テスト', () => {
     await expect(addInputButton).toBeVisible();
     await addInputButton.click();
 
-    const editInputButton = page.locator('button:has-text("テ")');
+    const editInputButton = page.locator('button:has-text("{{target_string}}")');
     await expect(editInputButton).toBeVisible();
     await editInputButton.click();
 
@@ -205,7 +205,7 @@ test.describe('プロンプトテンプレート管理テスト', () => {
     await expect(addInputButton2).toBeVisible();
     await addInputButton2.click();
 
-    const editInputButton2 = page.locator('button:has-text("数")');
+    const editInputButton2 = page.locator('button:has-text("{{target_number}}")');
     await expect(editInputButton2).toBeVisible();
     await editInputButton2.click();
 
