@@ -152,7 +152,12 @@ describe('FileImportExportService', () => {
     };
 
     it('ZIP形式のデータをインポートする', async () => {
-      const currentAppData = createMockAppData();
+      const currentAppData = createMockAppData({
+        settings: {
+          ...createMockAppData().settings,
+          defaultFrameworkId: '50715f31-70bc-40cb-925c-27198dc3e82c',
+        },
+      });
       mockGetAppData.mockResolvedValue(currentAppData);
 
       const arrayBuffer = await readZipFixtureOrGenerate();

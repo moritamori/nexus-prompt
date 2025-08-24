@@ -202,6 +202,7 @@ export class FileImportExportService {
     }
 
     // ルート直下の framework-*.md を処理（ファイル名昇順）
+    let defaultFrameworkId = '';
     {
       const fwFiles = Object.keys(zip.files)
         .filter((p) => /^framework-.*\.md$/i.test(p))
@@ -224,6 +225,7 @@ export class FileImportExportService {
             continue;
           }
           seenFrameworkIds.add(frameworkId);
+          defaultFrameworkId = frameworkId;
           frameworks.push({
             id: frameworkId,
             content: frameworkContent,
@@ -240,8 +242,12 @@ export class FileImportExportService {
     const currentAppData = await this.storage.getAppData();
     const newAppData: AppData = {
       ...currentAppData,
-      frameworks,
+      ...(frameworks.length > 0 ? { frameworks } : {}),
       prompts,
+      settings: {
+        ...currentAppData.settings,
+        ...(defaultFrameworkId ? { defaultFrameworkId } : {}),
+      }
     };
     await this.storage.saveAppData(newAppData);
 

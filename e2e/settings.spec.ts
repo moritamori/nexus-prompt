@@ -97,6 +97,7 @@ test.describe('インポート・エクスポート機能', () => {
     ],
     settings: {
       defaultFrameworkId: 'framework-1',
+      initialized: true,
       version: '1.0.2',
       language: 'ja'
     }
