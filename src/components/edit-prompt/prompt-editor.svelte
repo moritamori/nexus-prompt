@@ -14,7 +14,7 @@
   let cmInputOpenCleanup: (() => void) | null = null;
   export let value: string;
   export let inputs: PromptInputView[];
-  const dispatch = createEventDispatcher<{ input: string; change: string; openAddInput: { name: string; type: string, required: boolean }; openEditInputByIndex: { index: number }, deleteInput: { name: string } }>()
+  const dispatch = createEventDispatcher<{ input: string; change: string; openAddInput: { name: string; type: string, required: boolean, fromDraggable: boolean }; openEditInputByIndex: { index: number }, deleteInput: { name: string } }>()
 
   // inputのパターン
   const inputPattern = /\{\{[^}]+\}\}/g
@@ -183,7 +183,7 @@
       view.focus()
 
       if (name && (opts?.openModal ?? true)) {
-        dispatch('openAddInput', { name, type, required: false })
+        dispatch('openAddInput', { name, type, required: false, fromDraggable: false })
       }
     }
   }
@@ -238,7 +238,9 @@
         const idx = Array.isArray(inputs) ? inputs.findIndex(i => (i?.name ?? '').trim() === name) : -1
         if (idx >= 0) {
           dispatch('openEditInputByIndex', { index: idx })
+          return
         }
+        dispatch('openAddInput', { name: name, type: 'string', required: false, fromDraggable: true })
       } catch {
         // noop
       }
@@ -254,7 +256,7 @@
         if (idx >= 0) {
           dispatch('deleteInput', { name })
         }
-      } catch {
+       } catch {
         // noop
       }
     }

@@ -25,7 +25,7 @@
   let showInputModal = $state(false);
   let initialInput: Partial<PromptInputView> | undefined = $state({name: "target_string", type: "string", required: false});
   let editingIndex: number | null = $state(null);
-  // useNavHistoryが内部で履歴・戻るキー処理を担当するため、本コンポーネントでは状態を持たない
+  let fromInptDraggable: boolean = $state(false);
 
   // Constants
   const MAX_PROMPT_CONTENT_LENGTH = 10000;
@@ -33,16 +33,17 @@
   const MAX_PROMPT_COUNT = 20;
   const INPUT_TYPES = [ 'string', 'number', 'boolean' ] as PromptInputType[];
 
-  function openAddInputModal(_e: MouseEvent, defaultInput?: Partial<PromptInputView>) {
+  function openAddInputModal(defaultInput?: Partial<PromptInputView>, fromDraggable: boolean = false) {
     if (showInputModal) return;
     editingIndex = null;
     initialInput = defaultInput ?? { name: 'target_string', type: 'string', required: false };
     showInputModal = true;
+    fromInptDraggable = fromDraggable;
   }
 
   function cancelAddInput() {
     if (!showInputModal) return;
-    if (editingIndex == null && initialInput?.name) {
+    if (editingIndex == null && initialInput?.name && !fromInptDraggable) {
       editorRef?.deleteVarName?.(initialInput.name);
     }
     showInputModal = false;
@@ -254,7 +255,7 @@
         title="差し込み定義を追加"
         aria-label="差し込み定義を追加"
         data-testid="prompt-content-add-button"
-        onclick={openAddInputModal}
+        onclick={() => openAddInputModal(undefined)}
       >＋</button>
       {#if (promptViewModel.inputs?.length ?? 0) > 0}
         <div class="input-chips">
@@ -286,7 +287,7 @@
       bind:this={editorRef}
       bind:value={promptViewModel.template}
       bind:inputs={promptViewModel.inputs}
-      on:openAddInput={(e) => openAddInputModal(new MouseEvent('click'), { name: e.detail.name, type: e.detail.type as any, required: e.detail.required })}
+      on:openAddInput={(e) => openAddInputModal({ name: e.detail.name, type: e.detail.type as any, required: e.detail.required }, e.detail.fromDraggable)}
       on:openEditInputByIndex={(e) => onClickInputChip(e.detail.index)}
       on:deleteInput={triggerDeleteInput}
     />
