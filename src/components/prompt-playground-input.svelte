@@ -7,7 +7,7 @@
 
   function handleChange(e: Event) :void{
     if (e.target instanceof HTMLSelectElement) {
-      const v = e.target.value;
+      const v = (e.target as HTMLSelectElement).value;
       onchange(input.name, v);
       return;
     } else if (e.target instanceof HTMLInputElement) {
