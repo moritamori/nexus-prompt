@@ -90,27 +90,29 @@
     snapshotManager.handleInput();
   }
 
-  // セレクト変更時に該当プロンプトのテンプレートをコピー
-  $effect(() => {
-    const id = selectedPromptId;
-    if (!id) {
+  function handlePromptSelectChange(): void {
+    if (!selectedPrompt) {
       userPrompt = '';
+      inputKeyValues = {};
+      invalidInputs = {};
+      snapshotManager.handleInput();
       return;
     }
-    if (!selectedPrompt) return;
+
     const template = selectedPrompt.content.template ?? '';
+    userPrompt = template;
 
-    // Update userPrompt
-    if (template) {
-      userPrompt = template;
-    }
-    // 値の変更をスナップショット対象に反映
-    snapshotManager.handleInput();
-  });
-
-  function handlePromptSelectChange(): void {
-    if (!selectedPrompt) return;
-    inputKeyValues = {};
+    const defaults: Record<string, unknown> = {};
+    selectedPrompt.content.inputs.forEach((input) => {
+      if (input.default == undefined || input.default == null) {
+        defaults[input.name] = '';
+      } else if (typeof input.default === 'boolean') {
+        defaults[input.name] = input.default ? 'true' : 'false';
+      } else {
+        defaults[input.name] = input.default;
+      }
+    });
+    inputKeyValues = defaults;
     invalidInputs = {};
     snapshotManager.handleInput();
   }

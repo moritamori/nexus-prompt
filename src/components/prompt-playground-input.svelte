@@ -6,6 +6,16 @@
   let { input, inputStringRows, value, onchange, isInvalid } = $props<{ input: LatestPromptDsl['inputs'][number], inputStringRows: number, value: string | undefined, onchange: (name: string, value: string) => void, isInvalid: boolean }>();
 
   function handleChange(e: Event) :void{
+    if (e.target instanceof HTMLSelectElement) {
+      const v = e.target.value;
+      onchange(input.name, v);
+      return;
+    } else if (e.target instanceof HTMLInputElement) {
+      const v = (e.target as HTMLInputElement).value;
+      onchange(input.name, v);
+      return;
+    }
+
     const v = (e.target as HTMLTextAreaElement).value;
     onchange(input.name, v);
   }
@@ -30,8 +40,8 @@
 {:else if input.type === 'boolean'}
   <select id="{input.name}" bind:value="{value}" onchange={handleChange} class:border-red-500={isInvalid}>
     <option value="">{$t(`common.input-type-boolean-not-selected`)}{input.description ? `（${input.description}）` : ''}</option>
-    <option value="{$t(`common.input-type-boolean-true`)}" selected={String(input.default) === 'true'}>{$t(`common.input-type-boolean-true`)}</option>
-    <option value="{$t(`common.input-type-boolean-false`)}" selected={String(input.default) === 'false'}>{$t(`common.input-type-boolean-false`)}</option>
+    <option value="true">{$t(`common.input-type-boolean-true`)}</option>
+    <option value="false">{$t(`common.input-type-boolean-false`)}</option>
   </select>
 {:else}
   <textarea 
