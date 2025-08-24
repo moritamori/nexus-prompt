@@ -66,7 +66,12 @@ export const createMockAppData = (overrides: Partial<AppData> = {}): AppData => 
   providers: [createMockProvider()],
   frameworks: [createMockFramework()],
   prompts: [createMockPrompt()],
-  settings: { defaultFrameworkId: 'framework1', version: '1.0.0', language: 'ja' },
+  settings: { 
+    defaultFrameworkId: 'framework1', 
+    initialized: false,
+    version: '1.0.0', 
+    language: 'ja' 
+  },
   ...overrides,
 });
 

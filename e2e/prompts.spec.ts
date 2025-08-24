@@ -67,7 +67,7 @@ test.describe('プロンプトテンプレート管理テスト', () => {
         updatedAt: new Date().toISOString()
       }
     ],
-    settings: { defaultFrameworkId: frameworkId, version: '1.0.0', language: 'ja' }
+    settings: { defaultFrameworkId: frameworkId, initialized: true, version: '1.0.0', language: 'ja' }
   };
 
   test.beforeEach(async ({ serviceWorker }) => {

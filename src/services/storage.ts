@@ -2,6 +2,8 @@ import type { AppData, Framework, Prompt, Provider, SnapshotData } from '../type
 import { SecureApiKeyManager } from '../secure-api-key-manager';
 import { providersData } from '../data/llm-providers';
 import { DEFAULT_FRAMEWORK } from '../data/default-framework';
+import JSZip from 'jszip';
+import { FileImportExportService } from './file-import-export';
 import { Provider as ProviderData, Model as ModelData } from '../data/types';  
 import { v6 as uuidv6 } from 'uuid';
 
@@ -71,6 +73,7 @@ export class StorageService {
         }],
         settings: {
           defaultFrameworkId: frameworkId,
+          initialized: false,
           language: 'ja',
           version: '1.3.0' // TODO: manifest.jsonから動的に取得する
         }
@@ -298,6 +301,27 @@ export class StorageService {
     const data = await this.getSnapshot();
     data.activeTab = 'main';
     await this.saveSnapshot(data);
+  }
+
+  async initializePrompts(): Promise<void> {
+    const fileImportExportService = new FileImportExportService();
+    const url = chrome.runtime.getURL("nexus-prompt.zip");
+    const res = await fetch(url);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const zip = await JSZip.loadAsync(buf);
+    await fileImportExportService.importFromZip(zip, 'free');
+    await this.setInitialized(true);
+  }
+
+  async getInitialized(): Promise<boolean> {
+    const data = await this.getAppData();
+    return data.settings.initialized;
+  }
+
+  async setInitialized(initialized: boolean): Promise<void> {
+    const data = await this.getAppData();
+    data.settings.initialized = initialized;
+    await this.saveAppData(data);
   }
 }
 

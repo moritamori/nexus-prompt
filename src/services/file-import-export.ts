@@ -64,7 +64,10 @@ export class FileImportExportService {
     } catch (e) {
       throw new Error('インポートファイルの形式が正しくありません。');
     }
+    await this.importFromZip(zip, plan);
+  }
 
+  async importFromZip(zip: JSZip, plan: Plan): Promise<void> {
     const frameworks: Framework[] = [];
     const prompts: Prompt[] = [];
 

@@ -39,6 +39,7 @@ export interface Provider {
 
 export interface Settings {
   defaultFrameworkId: string;
+  initialized: boolean;
   language: string;
   version: string;
 }
