@@ -1,9 +1,9 @@
-import type { LatestPromptDsl } from './registry';
+import { LatestPromptDsl } from './registry';
+import type { LatestPromptDslType } from './registry';
 import { parsePrompt } from './registry';
-import { PromptDslV2 } from './v2';
 import type { z } from 'zod';
 
-export type PromptInputType = z.infer<typeof PromptDslV2.Input>['type'];
+export type PromptInputType = z.infer<typeof LatestPromptDsl.Input>['type'];
 
 export interface PromptInputView {
   name: string;
@@ -21,13 +21,13 @@ export interface PromptViewModel {
   slug?: string;
   template: string;
   inputs: PromptInputView[];
-  model?: LatestPromptDsl['model'];
-  controls?: LatestPromptDsl['controls'];
-  enums?: LatestPromptDsl['enums'];
-  labels?: LatestPromptDsl['labels'];
-  metadata?: LatestPromptDsl['metadata'];
-  context?: LatestPromptDsl['context'];
-  policies?: LatestPromptDsl['policies'];
+  model?: LatestPromptDslType['model'];
+  controls?: LatestPromptDslType['controls'];
+  enums?: LatestPromptDslType['enums'];
+  labels?: LatestPromptDslType['labels'];
+  metadata?: LatestPromptDslType['metadata'];
+  context?: LatestPromptDslType['context'];
+  policies?: LatestPromptDslType['policies'];
   tags?: string[];
   frameworkRef?: string;
 }
@@ -71,7 +71,7 @@ export function createPromptViewModel(input: string | unknown): PromptViewModel 
  * UIのPromptViewModelからDSL（LatestPromptDsl）を組み立てる
  * - スキーマで最終検証して返す
  */
-export function toPromptDsl(view: PromptViewModel): LatestPromptDsl {
+export function toPromptDsl(view: PromptViewModel): LatestPromptDslType {
   const inputs = (view.inputs ?? []).map((f) => {
     // オプショナルなプロパティは、値が存在する場合のみ追加し、YAML/JSONがクリーンになるようにする
     return {
@@ -85,7 +85,7 @@ export function toPromptDsl(view: PromptViewModel): LatestPromptDsl {
   });
 
   const candidate = {
-    version: PromptDslV2.Version,
+    version: LatestPromptDsl.Version,
     id: view.id,
     name: view.name,
     template: view.template,
@@ -104,5 +104,5 @@ export function toPromptDsl(view: PromptViewModel): LatestPromptDsl {
     ...(view.frameworkRef && { frameworkRef: view.frameworkRef }),
   };
 
-  return PromptDslV2.Schema.parse(candidate);
+  return LatestPromptDsl.Schema.parse(candidate);
 }

@@ -1,9 +1,9 @@
-import type { LatestPromptDsl } from './promptops/dsl/prompt/registry';
+import type { LatestPromptDslType } from './promptops/dsl/prompt/registry';
 import type { LatestFrameworkDsl } from './promptops/dsl/framework/registry';
 
 export interface Prompt {
   id: string;
-  content: LatestPromptDsl;
+  content: LatestPromptDslType;
   order: number;
   shared: boolean;
   createdAt: string;

@@ -19,6 +19,7 @@ export const createMockPrompt = (overrides: Partial<Prompt> = {}): Prompt => {
     content,
     order: 1,
     createdAt: iso,
+    shared: true,
     updatedAt: iso,
   } as Prompt;
 
@@ -34,8 +35,6 @@ export const createMockFramework = (overrides: Partial<Framework> = {}): Framewo
     version: 2 as const,
     name: 'テストフレームワーク',
     content: 'テスト内容',
-    slug: 'test-framework',
-    metadata: {},
     ...(overrides.content ?? {}),
     id: resolvedId,
   } as Framework['content'];

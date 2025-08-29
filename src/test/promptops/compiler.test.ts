@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { compilePromptToString } from '../../promptops/dsl/compiler';
-import type { LatestPromptDsl } from '../../promptops/dsl/prompt/registry';
+import type { LatestPromptDslType } from '../../promptops/dsl/prompt/registry';
 
-const basePrompt = (overrides: Partial<LatestPromptDsl> = {}): LatestPromptDsl => ({
+const basePrompt = (overrides: Partial<LatestPromptDslType> = {}): LatestPromptDslType => ({
   version: 2,
   id: '123e4567-e89b-12d3-a456-426614174000',
   name: 'compile-test',

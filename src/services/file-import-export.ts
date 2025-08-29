@@ -2,15 +2,16 @@ import type { AppData, Framework, Prompt } from '../types';
 import { storageService, StorageService } from './storage';
 import type { Plan } from '../stores';
 import JSZip from 'jszip';
-import { loadYaml, dumpYamlStable } from '../promptops/dsl/serializer';
+import { dumpYamlStable } from '../promptops/dsl/serializer';
 import { parseFramework } from '../promptops/dsl/framework/registry';
 import { parsePrompt } from '../promptops/dsl/prompt/registry';
+import { parseFrontMatter } from '../promptops/dsl/parser';
+
+export const APP_PROMPTS_JSON_FILE_NAME = 'app-prompts.json';
 
 // アプリケーションデータのインポート・エクスポートを管理するサービスクラス
 export class FileImportExportService {
   private storage: StorageService = storageService;
-
-  private APP_PROMPTS_JSON_FILE_NAME = 'app-prompts.json';
 
   /**
    * アプリケーションデータをMarkdown(Front-matter + Body)のZIPにエクスポートします。
@@ -44,7 +45,7 @@ export class FileImportExportService {
     }
 
     const promptsMeta = appData.prompts.map((p) => ({ id: p.id, order: p.order, shared: p.shared }));
-    zip.file(this.APP_PROMPTS_JSON_FILE_NAME, JSON.stringify(promptsMeta, null, 2));
+    zip.file(APP_PROMPTS_JSON_FILE_NAME, JSON.stringify(promptsMeta, null, 2));
 
     const zipData = await zip.generateAsync({ type: 'uint8array' });
     return zipData;
@@ -73,28 +74,49 @@ export class FileImportExportService {
 
     const nowIso = new Date().toISOString();
 
-    // フロントマター（YAML/JSON互換）+本文を抽出する軽量パーサ（ブラウザで Buffer を使わない）
-    const parseFrontMatter = (markdown: string): { data: Record<string, unknown>; body: string } | null => {
-      const lines = markdown.split(/\r?\n/);
-      if (!lines[0] || !/^---\s*$/.test(lines[0])) {
-        return null;
+    // ルート直下の framework-*.md を処理（ファイル名昇順）
+    let defaultFrameworkId = '';
+    {
+      const fwFiles = Object.keys(zip.files)
+        .filter((p) => /^framework-.*\.md$/i.test(p))
+        .sort((a, b) => b.localeCompare(a, 'en', { numeric: true, sensitivity: 'base' }));
+      const seenFrameworkIds = new Set<string>();
+      for (const path of fwFiles) {
+        const file = zip.file(path);
+        if (!file) continue;
+        try {
+          const markdown = await file.async('string');
+          const parsed = parseFrontMatter(markdown);
+          if (!parsed) continue;
+
+          // フロントマターと本文を結合し、DSLパーサーで検証・マイグレーション
+          const rawContent = { ...parsed.data, content: parsed.body };
+          const frameworkContent = parseFramework(rawContent);
+          const frameworkId = frameworkContent.id;
+
+          if (seenFrameworkIds.has(frameworkId)) {
+            continue;
+          }
+          seenFrameworkIds.add(frameworkId);
+          defaultFrameworkId = frameworkId;
+          frameworks.push({
+            id: frameworkId,
+            content: frameworkContent,
+            order: frameworks.length + 1,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          });
+        } catch (e) {
+          console.warn(`Skipping invalid framework file ${path}:`, e);
+        }
       }
-      let closeIndex = -1;
-      for (let i = 1; i < lines.length; i += 1) {
-        if (/^---\s*$/.test(lines[i])) { closeIndex = i; break; }
-      }
-      if (closeIndex === -1) {
-        return null;
-      }
-      const fmBody = lines.slice(1, closeIndex).join('\n').trim();
-      const body = lines.slice(closeIndex + 1).join('\n').replace(/^\n+/, '');
-      try {
-        const data = loadYaml(fmBody) as Record<string, unknown>;
-        return { data, body };
-      } catch {
-        return null;
-      }
-    };
+    }
+
+    // デフォルトフレームワークが指定されていない場合は、現在のデフォルトフレームワークを使用
+    const currentAppData = await this.storage.getAppData();
+    if (defaultFrameworkId === '') {
+      defaultFrameworkId = currentAppData.settings.defaultFrameworkId;
+    }
 
     // ルート直下の *.md のうち、framework- ではないものをすべて prompt として処理（ファイル名昇順）
     {
@@ -119,7 +141,7 @@ export class FileImportExportService {
           if (!parsed) continue;
 
           // フロントマターと本文を結合し、DSLパーサーで検証・マイグレーション
-          const rawContent = { ...parsed.data, template: parsed.body };
+          const rawContent = { ...parsed.data, template: parsed.body, frameworkRef: defaultFrameworkId };
           const promptContent = parsePrompt(rawContent);
           const promptId = promptContent.id;
 
@@ -134,7 +156,7 @@ export class FileImportExportService {
       }
 
       // app-prompts.json が存在する場合は、そこで指定された order / shared を適用
-      const metaFile = zip.file(this.APP_PROMPTS_JSON_FILE_NAME);
+      const metaFile = zip.file(APP_PROMPTS_JSON_FILE_NAME);
       if (metaFile) {
         try {
           const text = await metaFile.async('string');
@@ -201,45 +223,6 @@ export class FileImportExportService {
       }
     }
 
-    // ルート直下の framework-*.md を処理（ファイル名昇順）
-    let defaultFrameworkId = '';
-    {
-      const fwFiles = Object.keys(zip.files)
-        .filter((p) => /^framework-.*\.md$/i.test(p))
-        .sort((a, b) => b.localeCompare(a, 'en', { numeric: true, sensitivity: 'base' }));
-      const seenFrameworkIds = new Set<string>();
-      for (const path of fwFiles) {
-        const file = zip.file(path);
-        if (!file) continue;
-        try {
-          const markdown = await file.async('string');
-          const parsed = parseFrontMatter(markdown);
-          if (!parsed) continue;
-
-          // フロントマターと本文を結合し、DSLパーサーで検証・マイグレーション
-          const rawContent = { ...parsed.data, content: parsed.body };
-          const frameworkContent = parseFramework(rawContent);
-          const frameworkId = frameworkContent.id;
-
-          if (seenFrameworkIds.has(frameworkId)) {
-            continue;
-          }
-          seenFrameworkIds.add(frameworkId);
-          defaultFrameworkId = frameworkId;
-          frameworks.push({
-            id: frameworkId,
-            content: frameworkContent,
-            order: frameworks.length + 1,
-            createdAt: nowIso,
-            updatedAt: nowIso,
-          });
-        } catch (e) {
-          console.warn(`Skipping invalid framework file ${path}:`, e);
-        }
-      }
-    }
-
-    const currentAppData = await this.storage.getAppData();
     const newAppData: AppData = {
       ...currentAppData,
       ...(frameworks.length > 0 ? { frameworks } : {}),
@@ -253,7 +236,8 @@ export class FileImportExportService {
 
     const snapshot = await this.storage.getSnapshot();
     if (snapshot) {
-      snapshot.editPrompt = { id: null };
+      snapshot.promptPlayground = { ...snapshot.promptPlayground, selectedPromptId: '' };
+      snapshot.promptImprovement = { ...snapshot.promptImprovement, selectedPromptId: '' };
       await this.storage.saveSnapshot(snapshot);
     }
     return;

@@ -1,4 +1,4 @@
-import type { LatestPromptDsl } from './registry';
+import type { LatestPromptDslType } from './registry';
 
 export interface TemplateInputsConsistencyResult {
   missingInTemplate: string[]; // inputs にあるが template に無い
@@ -19,7 +19,7 @@ export function extractTemplateVariables(template: string): Set<string> {
   return result;
 }
 
-export function validateTemplateInputsConsistencyFromDsl(prompt: LatestPromptDsl): TemplateInputsConsistencyResult {
+export function validateTemplateInputsConsistencyFromDsl(prompt: LatestPromptDslType): TemplateInputsConsistencyResult {
   const template = typeof prompt.template === 'string' ? prompt.template : String(prompt.template ?? '');
   const templateVars = extractTemplateVariables(template);
   const inputNames = new Set<string>((prompt.inputs ?? []).map((i) => i?.name).filter(Boolean) as string[]);

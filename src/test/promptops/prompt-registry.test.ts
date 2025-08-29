@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parsePrompt, dumpPrompt, getLatestPromptVersion } from '../../promptops/dsl/prompt/registry';
+import { parsePrompt, dumpPrompt, LatestPromptDsl } from '../../promptops/dsl/prompt/registry';
 
 describe('prompt registry', () => {
   it('YAML/JSON文字列/オブジェクトの入力を受け取ってv2に正規化して返す', () => {
@@ -8,7 +8,7 @@ describe('prompt registry', () => {
     expect(obj.name).toBe('p');
     const yaml = dumpPrompt(obj);
     expect(typeof yaml).toBe('string');
-    expect(getLatestPromptVersion()).toBe(2);
+    expect(LatestPromptDsl.Version).toBe(2);
   });
 
   it('v1相当の入力をv2へマイグレートする', () => {

@@ -2,8 +2,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { FileImportExportService } from '../../services/file-import-export';
 import type { AppData, SnapshotData } from '../../types';
 import { createMockAppData, createMockFramework, createMockPrompt, createMockSnapshotData } from '../test-utils/factories';
-import { readFile } from 'fs/promises';
 import JSZip from 'jszip';
+import { v6 as uuidv6 } from 'uuid';
+import { webcrypto as nodeWebCrypto } from 'crypto';
+import { dumpYamlStable } from '../../promptops/dsl/serializer';
+import { APP_PROMPTS_JSON_FILE_NAME } from '../../services/file-import-export';
 
 // StorageServiceのモック関数を作成
 const mockGetAppData = vi.hoisted(() => vi.fn());
@@ -27,10 +30,14 @@ vi.mock('../../services/storage', () => ({
   },
 }));
 
-// crypto.randomUUID のモック
+// crypto のセットアップ: uuid が利用する getRandomValues を提供
 const mockRandomUUID = vi.hoisted(() => vi.fn());
 Object.defineProperty(globalThis, 'crypto', {
   value: {
+    getRandomValues: (<T extends ArrayBufferView>(arr: T): T =>
+      nodeWebCrypto.getRandomValues(arr as unknown as any) as unknown as T
+    ),
+    subtle: nodeWebCrypto.subtle,
     randomUUID: mockRandomUUID,
   },
   writable: true,
@@ -58,8 +65,13 @@ describe('FileImportExportService', () => {
 
   describe('export', () => {
     it('フレームワークデータをZIP形式でエクスポートする', async () => {
-      const testFramework = createMockFramework({ id: 'original-id' });
-      const testPrompt = createMockPrompt({ id: 'original-prompt-id' });
+      const frameworkId = uuidv6();
+      const promptId = uuidv6();
+      const testFramework = createMockFramework({ id: frameworkId });
+      const testPrompt = createMockPrompt({ id: promptId, content: {
+        ...createMockPrompt().content,
+        frameworkRef: frameworkId,
+      } });
       const testAppData = createMockAppData({
         frameworks: [testFramework],
         prompts: [testPrompt],
@@ -69,57 +81,45 @@ describe('FileImportExportService', () => {
 
       const result = await importExportService.export();
       expect(result).toBeInstanceOf(Uint8Array);
-      
       expect(result.byteLength).toBeGreaterThan(0);
 
-      expect(mockGetAppData).toHaveBeenCalledTimes(1);
-    });
+      const zip = await JSZip.loadAsync(result);
+      // フレームワークファイルの内容をチェック
+      const framework = zip.file(`framework-${testFramework.id}.md`);
+      expect(framework).toBeDefined();
+      const frameworkMarkdown = await framework?.async('string');
+      expect(frameworkMarkdown).toBe(
+        `---\n`+
+        `version: 2\n`+
+        `id: ${testFramework.id}\n`+
+        `name: ${testFramework.content.name}\n`+
+        `---\n`+
+        testFramework.content.content
+      );
 
-    it('複数のフレームワークとプロンプトを含むデータをエクスポートする', async () => {
-      const testFrameworks = [
-        createMockFramework({
-          id: 'fw1',
-          content: {
-            ...createMockFramework().content,
-            content: createMockFramework().content.content,
-          },
-        }),
-        createMockFramework({
-          id: 'fw2',
-          content: {
-            ...createMockFramework().content,
-            content: createMockFramework().content.content,
-          },
-        }),
-      ];
-      const testPrompts = [
-        createMockPrompt({
-          id: 'p1',
-          content: {
-            ...createMockPrompt().content,
-            template: createMockPrompt().content.template,
-          },
-        }),
-        createMockPrompt({
-          id: 'p2',
-          content: {
-            ...createMockPrompt().content,
-            template: createMockPrompt().content.template,
-          },
-        }),
-      ];
-      const testAppData = createMockAppData({
-        frameworks: testFrameworks,
-        prompts: testPrompts,
-      });
+      // プロンプトファイルの内容をチェック
+      const prompt = zip.file(`${testPrompt.id}.md`);
+      expect(prompt).toBeDefined();
+      const promptMarkdown = await prompt?.async('string');
+      expect(promptMarkdown).toBe(
+        `---\n`+
+        `version: 2\n`+
+        `id: ${testPrompt.id}\n`+
+        `name: ${testPrompt.content.name}\n`+
+        `inputs: []\n`+
+        `frameworkRef: ${frameworkId}\n`+
+        `---\n`+
+        testPrompt.content.template
+      );
 
-      mockGetAppData.mockResolvedValue(testAppData);
-
-      const result = await importExportService.export();
-      expect(result).toBeInstanceOf(Uint8Array);
-      expect(result.byteLength).toBeGreaterThan(0);
-
-      expect(mockGetAppData).toHaveBeenCalledTimes(1);
+      // app-prompts.json の内容をチェック
+      const appPromptsJson = zip.file(APP_PROMPTS_JSON_FILE_NAME);
+      expect(appPromptsJson).toBeDefined();
+      const appPromptsJsonText = await appPromptsJson?.async('string');
+      expect(appPromptsJsonText).toBe(
+        JSON.stringify(testAppData.prompts.map((p) => (
+          { id: p.id, order: p.order, shared: p.shared }
+        )), null, 2));
     });
 
     it('getAppDataがエラーをスローした場合、エラーが伝播する', async () => {
@@ -133,10 +133,47 @@ describe('FileImportExportService', () => {
   });
 
   describe('import', () => {
-    const zipPath = 'src/test/data/nexus-prompt-export-2025-08-11.zip';
+    let zip: JSZip;
+    const frameworkId = uuidv6();
+    const promptId = uuidv6();
+    let fmFramework: Record<string, unknown>;
+    let fmPrompt: Record<string, unknown>;
+
+    beforeEach(() => {
+      // モックのリセット
+      vi.clearAllMocks();
+
+      zip = new JSZip();
+      // ZIPを生成（framework と prompt のフロントマターJSON+本文）
+      {
+        fmFramework = {
+          id: frameworkId,
+          name: 'インポートされたフレームワーク',
+          version: 2,
+          content: 'インポート用フレームワーク内容',
+        } as Record<string, unknown>;
+        fmPrompt = {
+          version: 2,
+          id: promptId,
+          name: 'インポートされたプロンプト',
+          template: 'テンプレート',
+          inputs: [],
+        } as Record<string, unknown>;
+        const buildFrontMatterMd = (body: string, data: Record<string, unknown>): string => {
+          const yaml = dumpYamlStable(data);
+          return `---\n${yaml}---\n${body ?? ''}`;
+        };
+        const { content: frameworkContent, ...frameworkFrontMatter } = fmFramework;
+        zip.file(`framework-${fmFramework.id}.md`, buildFrontMatterMd(frameworkContent as string, frameworkFrontMatter));
+        const { template: promptTemplate, ...promptFrontMatter } = fmPrompt;
+        zip.file(`prompt-${fmPrompt.id}.md`, buildFrontMatterMd(promptTemplate as string, promptFrontMatter));
+        
+      }
+    });
+
     const toArrayBuffer = (u8: Uint8Array) => u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
     const readZipFixtureOrGenerate = async (): Promise<ArrayBuffer> => {
-      let bytes = await readFile(zipPath);
+      let bytes = await zip.generateAsync({ type: 'uint8array' });
       let ok = true;
       try {
         await JSZip.loadAsync(bytes);
@@ -151,11 +188,23 @@ describe('FileImportExportService', () => {
       return toArrayBuffer(bytes);
     };
 
-    it('ZIP形式のデータをインポートする', async () => {
+    it('ZIP形式のデータをインポートする(app-prompts.json が存在しない場合)', async () => {
       const currentAppData = createMockAppData({
+        frameworks: [createMockFramework({ id: frameworkId, content: {
+          ...createMockFramework().content,
+          name: 'インポートされたフレームワーク',
+          content: 'インポート用フレームワーク内容',
+        } })],
+        prompts: [createMockPrompt({ id: promptId, content: {
+          ...createMockPrompt().content,
+          name: 'インポートされたプロンプト',
+          tags: [],
+          template: 'テンプレート',
+          frameworkRef: frameworkId,
+        } })],
         settings: {
           ...createMockAppData().settings,
-          defaultFrameworkId: '50715f31-70bc-40cb-925c-27198dc3e82c',
+          defaultFrameworkId: frameworkId,
         },
       });
       mockGetAppData.mockResolvedValue(currentAppData);
@@ -164,11 +213,47 @@ describe('FileImportExportService', () => {
 
       await importExportService.import(arrayBuffer, 'free');
 
-      // saveAppDataが呼ばれることを確認（詳細はE2Eで担保）
       expect(mockSaveAppData).toHaveBeenCalledTimes(1);
       const savedData = mockSaveAppData.mock.calls[0][0] as AppData;
       expect(savedData.providers).toEqual(currentAppData.providers);
       expect(savedData.settings).toEqual(currentAppData.settings);
+      expect(savedData.frameworks).toEqual(currentAppData.frameworks);
+      expect(savedData.prompts).toEqual(currentAppData.prompts);
+    });
+
+    it('ZIP形式のデータをインポートする(app-prompts.json が存在する場合)', async () => {
+      zip.file(APP_PROMPTS_JSON_FILE_NAME, JSON.stringify([{ id: fmPrompt.id, order: 2, shared: false }], null, 2));
+      
+      const currentAppData = createMockAppData({
+        frameworks: [createMockFramework({ id: frameworkId, content: {
+          ...createMockFramework().content,
+          name: 'インポートされたフレームワーク',
+          content: 'インポート用フレームワーク内容',
+        } })],
+        prompts: [createMockPrompt({ id: promptId, order: 2, shared: false, content: {
+          ...createMockPrompt().content,
+          name: 'インポートされたプロンプト',
+          tags: [],
+          template: 'テンプレート',
+          frameworkRef: frameworkId,
+        } })],
+        settings: {
+          ...createMockAppData().settings,
+          defaultFrameworkId: frameworkId,
+        },
+      });
+      mockGetAppData.mockResolvedValue(currentAppData);
+
+      const arrayBuffer = await readZipFixtureOrGenerate();
+
+      await importExportService.import(arrayBuffer, 'free');
+
+      expect(mockSaveAppData).toHaveBeenCalledTimes(1);
+      const savedData = mockSaveAppData.mock.calls[0][0] as AppData;
+      expect(savedData.providers).toEqual(currentAppData.providers);
+      expect(savedData.settings).toEqual(currentAppData.settings);
+      expect(savedData.frameworks).toEqual(currentAppData.frameworks);
+      expect(savedData.prompts).toEqual(currentAppData.prompts);
     });
 
     it('ドラフトデータが存在する場合、selectedPromptIdをクリアする', async () => {
@@ -181,7 +266,8 @@ describe('FileImportExportService', () => {
 
       expect(mockSaveSnapshot).toHaveBeenCalledTimes(1);
       const savedSnapshot = mockSaveSnapshot.mock.calls[0][0] as SnapshotData;
-      expect(savedSnapshot.editPrompt.id).toBe(null);
+      expect(savedSnapshot.promptPlayground.selectedPromptId).toBe("");
+      expect(savedSnapshot.promptImprovement.selectedPromptId).toBe("");
     });
 
     it('スナップショットデータが存在しない場合、saveSnapshotは呼ばれない', async () => {
@@ -200,16 +286,5 @@ describe('FileImportExportService', () => {
 
       await expect(importExportService.import(arrayBuffer, 'free')).rejects.toThrow();
     });
-
-    // it('無料プランで20個より多くのプロンプトをインポートしようとした場合、エラーをスローする', async () => {
-    //   const currentAppData = createMockAppData({
-    //     prompts: Array.from({ length: 21 }, (_, i) => createMockPrompt({ id: `prompt-${i + 1}` })),
-    //   });
-    //   mockGetAppData.mockResolvedValue(currentAppData);
-
-    //   const arrayBuffer = await readZipFixtureOrGenerate();
-
-    //   await expect(importExportService.import(arrayBuffer, 'free')).rejects.toThrow();
-    // });
   });
 }); 

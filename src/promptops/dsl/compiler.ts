@@ -1,4 +1,4 @@
-import type { LatestPromptDsl } from './prompt/registry';
+import type { LatestPromptDslType } from './prompt/registry';
 
 export interface CompileOptions {
   // テンプレ埋め込み用の変数（UIやCLIから渡される任意値）
@@ -6,7 +6,7 @@ export interface CompileOptions {
 }
 
 export function compilePromptToString(
-  prompt: LatestPromptDsl,
+  prompt: LatestPromptDslType,
   options: CompileOptions = {}
 ): string {
   const baseTemplate = typeof prompt.template === 'string' ? prompt.template : String(prompt.template);
@@ -15,7 +15,7 @@ export function compilePromptToString(
 
 function fillTemplateVariables(
   template: string,
-  prompt: LatestPromptDsl,
+  prompt: LatestPromptDslType,
   provided?: Record<string, unknown>
 ): string {
   if (!provided || Object.keys(provided).length === 0) {
@@ -36,7 +36,7 @@ function fillTemplateVariables(
   return replaceTemplate(template, values);
 }
 
-function collectDefaultValues(prompt: LatestPromptDsl): Record<string, string> {
+function collectDefaultValues(prompt: LatestPromptDslType): Record<string, string> {
   const defaults: Record<string, string> = {};
   if (Array.isArray(prompt.inputs)) {
     for (const input of prompt.inputs) {
