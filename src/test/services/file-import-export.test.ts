@@ -167,7 +167,6 @@ describe('FileImportExportService', () => {
         zip.file(`framework-${fmFramework.id}.md`, buildFrontMatterMd(frameworkContent as string, frameworkFrontMatter));
         const { template: promptTemplate, ...promptFrontMatter } = fmPrompt;
         zip.file(`prompt-${fmPrompt.id}.md`, buildFrontMatterMd(promptTemplate as string, promptFrontMatter));
-        
       }
     });
 
@@ -188,14 +187,33 @@ describe('FileImportExportService', () => {
       return toArrayBuffer(bytes);
     };
 
-    it('ZIP形式のデータをインポートする(app-prompts.json が存在しない場合)', async () => {
+    it.each<[
+      string,
+      'none' | 'valid' | 'invalid',
+      Partial<ReturnType<typeof createMockPrompt>>
+    ]>([
+      ['app-prompts.json が存在しない場合', 'none', { order: 1, shared: true }],
+      ['app-prompts.json が存在する場合', 'valid', { order: 2, shared: false }],
+      ['app-prompts.json が壊れている場合', 'invalid', { order: 1, shared: true }],
+    ])('ZIP形式のデータをインポートする(%s)', async (_title, metaFileType, expectedPromptOverrides) => {
+      if (metaFileType === 'valid') {
+        // app-prompts.json を付与
+        zip.file(
+          APP_PROMPTS_JSON_FILE_NAME,
+          JSON.stringify([{ id: fmPrompt.id, order: 2, shared: false }], null, 2)
+        );
+      } else if (metaFileType === 'invalid') {
+        // 壊れた JSON を格納
+        zip.file(APP_PROMPTS_JSON_FILE_NAME, '{ invalid json }');
+      }
+
       const currentAppData = createMockAppData({
         frameworks: [createMockFramework({ id: frameworkId, content: {
           ...createMockFramework().content,
           name: 'インポートされたフレームワーク',
           content: 'インポート用フレームワーク内容',
         } })],
-        prompts: [createMockPrompt({ id: promptId, content: {
+        prompts: [createMockPrompt({ id: promptId, ...(expectedPromptOverrides as any), content: {
           ...createMockPrompt().content,
           name: 'インポートされたプロンプト',
           tags: [],
@@ -221,42 +239,7 @@ describe('FileImportExportService', () => {
       expect(savedData.prompts).toEqual(currentAppData.prompts);
     });
 
-    it('ZIP形式のデータをインポートする(app-prompts.json が存在する場合)', async () => {
-      zip.file(APP_PROMPTS_JSON_FILE_NAME, JSON.stringify([{ id: fmPrompt.id, order: 2, shared: false }], null, 2));
-      
-      const currentAppData = createMockAppData({
-        frameworks: [createMockFramework({ id: frameworkId, content: {
-          ...createMockFramework().content,
-          name: 'インポートされたフレームワーク',
-          content: 'インポート用フレームワーク内容',
-        } })],
-        prompts: [createMockPrompt({ id: promptId, order: 2, shared: false, content: {
-          ...createMockPrompt().content,
-          name: 'インポートされたプロンプト',
-          tags: [],
-          template: 'テンプレート',
-          frameworkRef: frameworkId,
-        } })],
-        settings: {
-          ...createMockAppData().settings,
-          defaultFrameworkId: frameworkId,
-        },
-      });
-      mockGetAppData.mockResolvedValue(currentAppData);
-
-      const arrayBuffer = await readZipFixtureOrGenerate();
-
-      await importExportService.import(arrayBuffer, 'free');
-
-      expect(mockSaveAppData).toHaveBeenCalledTimes(1);
-      const savedData = mockSaveAppData.mock.calls[0][0] as AppData;
-      expect(savedData.providers).toEqual(currentAppData.providers);
-      expect(savedData.settings).toEqual(currentAppData.settings);
-      expect(savedData.frameworks).toEqual(currentAppData.frameworks);
-      expect(savedData.prompts).toEqual(currentAppData.prompts);
-    });
-
-    it('ドラフトデータが存在する場合、selectedPromptIdをクリアする', async () => {
+    it('スナップショットデータが存在する場合、selectedPromptIdをクリアする', async () => {
       const currentSnapshot = createMockSnapshotData({ editPrompt: { id: 'existing-prompt-id' } });
       mockGetSnapshot.mockResolvedValue(currentSnapshot);
 
@@ -285,6 +268,30 @@ describe('FileImportExportService', () => {
       const arrayBuffer = invalidBytes.buffer.slice(invalidBytes.byteOffset, invalidBytes.byteOffset + invalidBytes.byteLength);
 
       await expect(importExportService.import(arrayBuffer, 'free')).rejects.toThrow();
+    });
+
+    it('無料プランで20件より多いプロンプトをインポートしようとするとエラーをスローする', async () => {
+      const zip = new JSZip();
+      for (let i = 0; i < 21; i++) {
+        const promptId = uuidv6();
+        const fmPrompt = {
+          version: 2,
+          id: promptId,
+          name: `インポートされたプロンプト ${i + 1}`,
+          template: 'テンプレート',
+          inputs: [],
+        };
+        const buildFrontMatterMd = (body: string, data: Record<string, unknown>): string => {
+          const yaml = dumpYamlStable(data);
+          return `---\n${yaml}---\n${body ?? ''}`;
+        };
+        const { template: promptTemplate, ...promptFrontMatter } = fmPrompt;
+        zip.file(`prompt-${promptId}.md`, buildFrontMatterMd(promptTemplate as string, promptFrontMatter));
+      }
+
+      const arrayBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+      await expect(importExportService.import(arrayBuffer, 'free')).rejects.toThrow('無料プランでは20個より多くプロンプトをインポートできません。');
+      expect(mockSaveAppData).not.toHaveBeenCalled();
     });
   });
 }); 

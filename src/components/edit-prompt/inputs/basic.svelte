@@ -16,6 +16,7 @@
   ondragend={onDragEndLocal((v) => isDragging = v)}
   data-type={type}
   data-key={key}
+  data-testid={`basic-input-${type}`}
   title="差し込み（{typeLabel}）をエディターに追加"
   aria-label="差し込み（{typeLabel}）をエディターに追加"
   role="button"

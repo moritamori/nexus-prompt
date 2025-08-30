@@ -74,7 +74,7 @@
     snapshotData.update((current: SnapshotData | null) => current ? { 
       ...current, 
       promptPlayground: { 
-        ...current.promptPlayground, selectedPromptId: '' 
+        ...current.promptPlayground, selectedPromptId: '', userPrompt: '', inputKeyValues: {}
       }, 
       promptImprovement: 
         { 

@@ -6,10 +6,20 @@ import JSZip from 'jszip';
 import { FileImportExportService } from './file-import-export';
 import { Provider as ProviderData, Model as ModelData } from '../data/types';  
 import { v6 as uuidv6 } from 'uuid';
+import { CURRENT_SCHEMA_VERSION } from '../types';
 
 // ストレージキー
 export const STORAGE_KEY = 'nexus/appData';
 export const SNAPSHOT_STORAGE_KEY = 'nexus/snapshot';
+export const SCHEMA_VERSION_KEY = 'nexus/schemaVersion';
+
+// マイグレーション関数型: ある版から次の版へ AppData を変換
+type Migration = (data: AppData, snapshotData: SnapshotData) => Promise<{ appData: AppData, snapshotData: SnapshotData }> | { appData: AppData, snapshotData: SnapshotData };
+
+// 0 -> 1 の最小ノーオペマイグレーション（将来ここに実処理を追加）
+const MIGRATIONS: Migration[] = [
+  async (data, snapshotData) => { return { appData: data, snapshotData: snapshotData }; },
+];
 
 /**
  * データストレージ管理クラス
@@ -19,6 +29,51 @@ export class StorageService {
 
   constructor() {
     this.apiKeyManager = new SecureApiKeyManager();
+  }
+
+  /**
+   * 保存済みのスキーマ版を取得（未設定の場合は 0 を返す）
+   */
+  private async getStoredSchemaVersion(): Promise<number> {
+    const result = await chrome.storage.local.get([SCHEMA_VERSION_KEY]);
+    const v = result[SCHEMA_VERSION_KEY];
+    return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+  }
+
+  /**
+   * 現在のスキーマ版を保存
+   */
+  private async setStoredSchemaVersion(v: number): Promise<void> {
+    await chrome.storage.local.set({ [SCHEMA_VERSION_KEY]: v });
+  }
+
+  /**
+   * 渡された AppData, SnapshotData に対して未適用のマイグレーションを順に実行し、
+   * 保存データとスキーマ版を更新する。
+   * @returns マイグレーション後の AppData, SnapshotData
+   */
+  private async runMigrations(appData: AppData, snapshotData: SnapshotData): Promise<AppData> {
+    let currentVersion = await this.getStoredSchemaVersion();
+    let workingAppData = appData;
+    let workingSnapshotData = snapshotData;
+
+    while (currentVersion < CURRENT_SCHEMA_VERSION) {
+      const migrate = MIGRATIONS[currentVersion];
+      if (typeof migrate !== 'function') {
+        // 定義が無い場合は安全側でスキップし、現行版にアジャスト
+        currentVersion = CURRENT_SCHEMA_VERSION;
+        break;
+      }
+      const { appData, snapshotData } = await migrate(workingAppData, workingSnapshotData);
+      workingAppData = appData;
+      workingSnapshotData = snapshotData;
+      await this.saveAppData(workingAppData);
+      await this.saveSnapshot(workingSnapshotData);
+      currentVersion += 1;
+      await this.setStoredSchemaVersion(currentVersion);
+    }
+
+    return workingAppData;
   }
 
   /**
@@ -37,19 +92,21 @@ export class StorageService {
   }
 
   /**
-   * アプリケーションデータを初期化
+   * データを初期化
    * 拡張機能のインストール時またはアップデート時に呼び出されることを想定しています。
    */
-  async initializeAppData(): Promise<void> {
+  async initializeData(): Promise<void> {
     const result = await chrome.storage.local.get([STORAGE_KEY]);
-    const existingData = result[STORAGE_KEY] as AppData | undefined;
+    const existingAppData = result[STORAGE_KEY] as AppData | undefined;
+    const result2 = await chrome.storage.local.get([SNAPSHOT_STORAGE_KEY]);
+    const existingSnapshotData = result2[SNAPSHOT_STORAGE_KEY] as SnapshotData | undefined;
 
-    if (existingData) {
-      // データが既にある場合（アップデートなど）：データのマイグレーション処理
-      const { providers: mergedProviders, hasChanged } = await this.mergeProviders(existingData.providers);
+    if (existingAppData && existingSnapshotData) {
+      const migrated: AppData = await this.runMigrations(existingAppData, existingSnapshotData);
+      const { providers: mergedProviders, hasChanged } = await this.mergeProviders(migrated.providers);
       if (hasChanged) {
-        existingData.providers = mergedProviders;
-        await this.saveAppData(existingData);
+        migrated.providers = mergedProviders;
+        await this.saveAppData(migrated);
       }
     } else {
       // データが存在しない場合（初回インストール）：初期データを作成
@@ -75,10 +132,19 @@ export class StorageService {
           defaultFrameworkId: frameworkId,
           initialized: false,
           language: 'ja',
-          version: '1.3.0' // TODO: manifest.jsonから動的に取得する
+          version: '1.3.1' // TODO: manifest.jsonから動的に取得する
         }
       };
+      const defaultSnapshot: SnapshotData = {
+        promptPlayground: { selectedPromptId: '', userPrompt: '', inputKeyValues: {} },
+        promptImprovement: { userPrompt: '', selectedPromptId: '', resultArea: '', selectedModelId: '' },
+        editPrompt: { id: null },
+        activeTab: 'main',
+        activeScreen: null
+      };
       await this.saveAppData(defaultData);
+      await this.saveSnapshot(defaultSnapshot);
+      await this.setStoredSchemaVersion(CURRENT_SCHEMA_VERSION);
     }
   }
 

@@ -45,7 +45,7 @@ chrome.runtime.onInstalled.addListener(async (_details) => {
     return;
   }
 
-  await storageService.initializeAppData();
+  await storageService.initializeData();
 
   const initialized = await storageService.getInitialized();
   if (!initialized) {
@@ -55,7 +55,7 @@ chrome.runtime.onInstalled.addListener(async (_details) => {
   await ensureContextMenu();
 });
 
-(self as any)._test_initialize = () => storageService.initializeAppData();
+(self as any)._test_initialize = () => storageService.initializeData();
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === CONTEXT_MENU_ID && tab?.id) {

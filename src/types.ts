@@ -1,6 +1,8 @@
 import type { LatestPromptDslType } from './promptops/dsl/prompt/registry';
 import type { LatestFrameworkDsl } from './promptops/dsl/framework/registry';
 
+export const CURRENT_SCHEMA_VERSION = 1;
+
 export interface Prompt {
   id: string;
   content: LatestPromptDslType;

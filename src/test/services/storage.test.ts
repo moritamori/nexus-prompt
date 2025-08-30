@@ -91,9 +91,9 @@ describe('StorageService', () => {
     });
   });
 
-  describe('initializeAppData', () => {
+  describe('initializeData', () => {
     it('データを初期化する', async () => {
-      const result = await storageService.initializeAppData();
+      const result = await storageService.initializeData();
       expect(result).toBeUndefined();
     });
 
@@ -112,11 +112,11 @@ describe('StorageService', () => {
           return savedData ? { [STORAGE_KEY]: savedData } : {};
         });
 
-      await storageService.initializeAppData();
+      await storageService.initializeData();
       const result = await storageService.getAppData();
 
-      expect(mockChromeStorage.local.set).toHaveBeenCalledTimes(1);
-      expect(mockChromeStorage.local.get).toHaveBeenCalledTimes(2);
+      expect(mockChromeStorage.local.set).toHaveBeenCalledTimes(3);
+      expect(mockChromeStorage.local.get).toHaveBeenCalledTimes(3);
       expect(result.providers).toHaveLength(1);
       expect(result.providers[0].name).toBe('Gemini');
       expect(result.frameworks).toHaveLength(1);
@@ -165,7 +165,7 @@ describe('StorageService', () => {
           return savedData ? { [STORAGE_KEY]: savedData } : {};
         });
 
-      await serviceWithNewModel.initializeAppData();
+      await serviceWithNewModel.initializeData();
 
       // データが保存されることを確認（マージによって変更があったため）
       expect(mockChromeStorage.local.set).toHaveBeenCalled();
@@ -184,13 +184,14 @@ describe('StorageService', () => {
 
     it('プロバイダー配列が空の場合、データを読み込む', async () => {
       const existingData = createMockAppData({ providers: [] });
-
+      const existingSnapshotData = createMockSnapshotData();
       mockChromeStorage.local.get.mockResolvedValue({
-        [STORAGE_KEY]: existingData
+        [STORAGE_KEY]: existingData,
+        [SNAPSHOT_STORAGE_KEY]: existingSnapshotData,
       });
       mockChromeStorage.local.set.mockResolvedValue(undefined);
 
-      await storageService.initializeAppData();
+      await storageService.initializeData();
       const result = await storageService.getAppData();
 
       expect(mockChromeStorage.local.set).toHaveBeenCalled();

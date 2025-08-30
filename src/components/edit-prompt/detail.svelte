@@ -133,6 +133,20 @@
     return null;
   }
 
+  function handleMoveByIndex(index: number, direction: 'up' | 'down'): void {
+    const inputs = [...(promptViewModel.inputs ?? [])];
+    if (inputs.length === 0) return;
+    if (index < 0 || index >= inputs.length) return;
+    // 指定に合わせて境界をクランプ
+    const tentative = direction === 'up' ? index + 1 : index - 1;
+    const newIndex = Math.max(0, Math.min(tentative, inputs.length - 1));
+    if (newIndex === index) return;
+    const [item] = inputs.splice(index, 1);
+    inputs.splice(newIndex, 0, item);
+    promptViewModel.inputs = inputs;
+    editingIndex = newIndex;
+  }
+
   // Event handler, Props
   let { promptSelectionReset, backToList, promptId } = $props();
 
@@ -308,10 +322,13 @@
     initial={initialInput}
     inputTypes={INPUT_TYPES}
     inputs={promptViewModel.inputs}
+    bind:editingIndex={editingIndex}
     editing={editingIndex != null}
     on:save={handleSaveInput}
     on:cancel={cancelAddInput}
     on:delete={handleDeleteInput}
+    onMovePrev={() => { if (editingIndex != null) handleMoveByIndex(editingIndex, 'down'); }}
+    onMoveNext={() => { if (editingIndex != null) handleMoveByIndex(editingIndex, 'up'); }}
   />
 {/if}
 

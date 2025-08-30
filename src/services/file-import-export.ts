@@ -6,6 +6,7 @@ import { dumpYamlStable } from '../promptops/dsl/serializer';
 import { parseFramework } from '../promptops/dsl/framework/registry';
 import { parsePrompt } from '../promptops/dsl/prompt/registry';
 import { parseFrontMatter } from '../promptops/dsl/parser';
+import { UuidV1toV6 } from '../promptops/dsl/schema-common';
 
 export const APP_PROMPTS_JSON_FILE_NAME = 'app-prompts.json';
 
@@ -74,11 +75,18 @@ export class FileImportExportService {
 
     const nowIso = new Date().toISOString();
 
+    const isUuid = (s: string): boolean => UuidV1toV6.safeParse(s).success === true;
+    const baseName = (p: string): string => p.split('/').pop() ?? p;
+
     // ルート直下の framework-*.md を処理（ファイル名昇順）
     let defaultFrameworkId = '';
     {
       const fwFiles = Object.keys(zip.files)
-        .filter((p) => /^framework-.*\.md$/i.test(p))
+        .filter((p) => {
+          const b = baseName(p);
+          const m = b.match(/^framework-(.+)\.md$/i);
+          return !!(m && isUuid(m[1]));
+        })
         .sort((a, b) => b.localeCompare(a, 'en', { numeric: true, sensitivity: 'base' }));
       const seenFrameworkIds = new Set<string>();
       for (const path of fwFiles) {
@@ -118,11 +126,21 @@ export class FileImportExportService {
       defaultFrameworkId = currentAppData.settings.defaultFrameworkId;
     }
 
-    // ルート直下の *.md のうち、framework- ではないものをすべて prompt として処理（ファイル名昇順）
+    // ルート直下の *.md のうち、framework- ではなく prompt- または <uuid>.md の場合は prompt として処理（ファイル名昇順）
     {
       const prFiles = Object.keys(zip.files)
-        .filter((p) => /\.md$/i.test(p))
-        .filter((p) => !/^framework-.*\.md$/i.test(p))
+        .filter((p) => {
+          const b = baseName(p);
+          // framework-*.md は対象外
+          if (/^framework-.*\.md$/i.test(b)) return false;
+          // prompt-<uuid>.md の <uuid> がUUIDの場合
+          const mPrompt = b.match(/^prompt-(.+)\.md$/i);
+          if (mPrompt && isUuid(mPrompt[1])) return true;
+          // <uuid>.md の <uuid> がUUIDの場合
+          const mSimple = b.match(/^(.+)\.md$/i);
+          if (mSimple && isUuid(mSimple[1])) return true;
+          return false;
+        })
         .sort((a, b) => b.localeCompare(a, 'en', { numeric: true, sensitivity: 'base' }));
 
       if (plan === 'free' && prFiles.length > 20) {

@@ -107,8 +107,8 @@ export async function initializeStores(): Promise<void> {
     data = await storageService.getAppData();
     appData.setFromStorage(data);
   } catch (e) {
-    console.warn('AppDataが未初期化のため初期化します:', e);
-    await storageService.initializeAppData();
+    console.warn('データが未初期化のため初期化します:', e);
+    await storageService.initializeData();
     data = await storageService.getAppData();
     appData.setFromStorage(data);
   }

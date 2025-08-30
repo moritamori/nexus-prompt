@@ -5,9 +5,9 @@
   import { t } from '../../lib/translations/translations';
 
   // Props
-  let { inputTypes, initial, inputs, editing = false }: { inputTypes: PromptInputType[], initial?: Partial<PromptInputView>, inputs?: PromptInputView[], editing?: boolean } = $props();
+  let { inputTypes, initial, inputs, editing = false, editingIndex = $bindable(), onMovePrev, onMoveNext }: { inputTypes: PromptInputType[], initial?: Partial<PromptInputView>, inputs?: PromptInputView[], editing?: boolean, editingIndex?: number | null, onMovePrev?: () => void, onMoveNext?: () => void } = $props();
 
-  const dispatch = createEventDispatcher<{ save: PromptInputView; cancel: void; delete: void }>();
+  const dispatch = createEventDispatcher<{ save: PromptInputView; cancel: void; delete: void; movePrev: void; moveNext: void }>();
 
   // Local state (draft)
   const rename = function(name: string, inputs: PromptInputView[], editing: boolean) {
@@ -66,6 +66,12 @@
   function onDelete() {
     dispatch('delete');
   }
+  function onClickMovePrev() {
+    if (typeof onMovePrev === 'function') onMovePrev(); else dispatch('movePrev');
+  }
+  function onClickMoveNext() {
+    if (typeof onMoveNext === 'function') onMoveNext(); else dispatch('moveNext');
+  }
 
   function handleOverlayClick(e: MouseEvent) {
     if (e.target === e.currentTarget && overlayMouseDown) {
@@ -85,10 +91,8 @@
   }
 
   function handleTypeChange(e: Event) {
-    const value = (e.target as HTMLSelectElement).value as PromptInputType;
-    if (value === (initial?.type as PromptInputType | undefined)) {
-      name = (initial?.name ?? '') as string;
-    } else {
+    if (!editing && /^target_(string|number|boolean)\d*$/.test(name)) {
+      const value = (e.target as HTMLSelectElement).value as PromptInputType;
       const next = rename(`target_${value}`, inputs ?? [], false);
       name = next;
     }
@@ -124,8 +128,28 @@
 
 <div class="modal-overlay" role="presentation" onclick={handleOverlayClick} onmousedown={handleOverlayMouseDown}>
   <div bind:this={modalEl} class="modal" role="dialog" aria-modal="true" aria-labelledby="input-modal-title" tabindex="-1" onmousedown={handleModalMouseDown} onkeydown={handleModalKeydown}>
-    <div class="modal-header">
-      <div class="modal-title" id="input-modal-title">差し込み定義を{editing ? '編集' : '追加'}</div>
+    <div class="modal-header" data-testid="input-modal-header">
+      <div class="modal-title" id="input-modal-title">
+        差し込み定義を{editing ? '編集' : '追加'}{editing && editingIndex != null ? ` (${editingIndex + 1}番目)` : ''}
+        {#if editing}
+          <span class="inline-actions">
+            <button
+              class="inline-action-button"
+              type="button"
+              onclick={onClickMovePrev}
+              disabled={editingIndex == null || (inputs && editingIndex !== null ? editingIndex <= 0 : true)}
+              title="前に移動"
+            >前に移動</button>
+            <button
+              class="inline-action-button"
+              type="button"
+              onclick={onClickMoveNext}
+              disabled={editingIndex == null || (inputs && editingIndex !== null ? editingIndex >= (inputs?.length ?? 1) - 1 : true)}
+              title="次に移動"
+            >次に移動</button>
+          </span>
+        {/if}
+      </div>
       {#if editing}
         <button class="delete-button" type="button" onclick={onDelete}>削除</button>
       {/if}
@@ -134,14 +158,14 @@
     <div class="modal-body">
       <div class="form-group">
         <label class="field-label" for="input-type">タイプ</label>
-        <select bind:value={type} id="input-type" onchange={handleTypeChange}>
+        <select bind:value={type} id="input-type" data-testid="input-type" onchange={handleTypeChange}>
           {#each inputTypes as it}
             <option value={it}>{$t(`common.input-type-${it}-name`)}</option>
           {/each}
         </select>
       </div>
       <div class="form-group">
-        <label class="field-label" for="input-name">名前</label>
+        <label class="field-label" for="input-name" data-testid="input-name">名前</label>
         <input
           type="text"
           id="input-name"
@@ -157,29 +181,29 @@
       </div>
       <div class="form-group">
         <label class="field-label" for="input-required">必須</label>
-        <select id="input-required" bind:value={required}>
+        <select id="input-required" data-testid="input-required" bind:value={required}>
           <option value="true">はい</option>
           <option value="false">いいえ</option>
         </select>
       </div>
       <div class="form-group">
         <label class="field-label" for="input-description">説明</label>
-        <textarea bind:value={description} placeholder="任意の説明" id="input-description" rows={2} ></textarea>
+        <textarea bind:value={description} placeholder="任意の説明" id="input-description" data-testid="input-description" rows={2} ></textarea>
       </div>
       <div class="form-group">
         <label class="field-label" for="input-default">デフォルト値</label>
         {#if type === 'string'}
-          <textarea bind:value={defaultRaw} id="input-default" rows={2} ></textarea>
+          <textarea bind:value={defaultRaw} id="input-default" data-testid="input-default" rows={2} ></textarea>
         {:else if type === 'number'}
-          <input type="number" bind:value={defaultRaw} id="input-default" />
+          <input type="number" bind:value={defaultRaw} id="input-default" data-testid="input-default"/>
         {:else if type === 'boolean'}
-          <select id="input-default" bind:value={defaultRaw}>
+          <select id="input-default" data-testid="input-default" bind:value={defaultRaw}>
             <option value="">{$t(`common.input-type-boolean-none`)}</option>
             <option value="true">{$t(`common.input-type-boolean-true`)}</option>
             <option value="false">{$t(`common.input-type-boolean-false`)}</option>
           </select>
         {:else}
-          <textarea bind:value={defaultRaw} id="input-default" rows={2} ></textarea>
+          <textarea bind:value={defaultRaw} id="input-default" data-testid="input-default" rows={2} ></textarea>
         {/if}
       </div>
     </div>
@@ -219,6 +243,25 @@
   }
   .modal-title {
     font-weight: 600;
+  }
+  .inline-actions { display: inline-flex; gap: 8px; margin-left: 8px; }
+  .inline-action-button {
+    appearance: none;
+    border: 1px solid transparent;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    line-height: 1.2;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .inline-action-button:hover:not(:disabled) {
+    background: rgba(0,0,0,0.04);
+  }
+  .inline-action-button:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .modal-body {
     padding: 12px 16px;

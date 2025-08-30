@@ -79,7 +79,7 @@ export function toPromptDsl(view: PromptViewModel): LatestPromptDslType {
       type: f.type,
       ...(f.required && { required: true }), // required: false はデフォルトなので省略
       ...(f.ref && { ref: f.ref }),
-      ...(f.description && { description: f.description }),
+      ...(f.description !== undefined ? { description: f.description } : {}),
       ...(f.defaultValue !== undefined && { default: f.defaultValue }),
     };
   });
