@@ -397,17 +397,35 @@ export class InputDraggablePlugin {
       const placeholderStart = target.from
       const placeholderEnd = target.to
 
-      let shouldDeletePlaceholder = false
-      if (event.key === 'Delete') {
-        // DEL: カーソル位置がプレースホルダー内
-        if (pos >= placeholderStart && pos < placeholderEnd) shouldDeletePlaceholder = true
-      } else {
-        // Backspace: カーソル位置がプレースホルダー内または直後
-        if (pos > placeholderStart && pos <= placeholderEnd) shouldDeletePlaceholder = true
+      // ドキュメント内で「同じ名前のプレースホルダー」が残り1つ（=今回対象が最後）の場合のみ特別削除を許可
+      const docText = view.state.doc.toString()
+      const thisPlaceholderRaw = docText.slice(placeholderStart, placeholderEnd)
+      const thisName = thisPlaceholderRaw
+        .replace(/^\{\{\s*/, '')
+        .replace(/\s*\}\}$/, '')
+        .trim()
+
+      let sameNameCount = 0
+      if (thisName) {
+        inputPattern.lastIndex = 0
+        const matches = docText.match(inputPattern) || []
+        for (const m of matches) {
+          const n = m.replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, '').trim()
+          if (n === thisName) sameNameCount++
+        }
       }
 
+      let shouldDeletePlaceholder = false
+      if (thisName && sameNameCount === 1) {
+        if (event.key === 'Delete') {
+          // DEL: カーソル位置がプレースホルダー内
+          if (pos >= placeholderStart && pos < placeholderEnd) shouldDeletePlaceholder = true
+        } else {
+          // Backspace: カーソル位置がプレースホルダー内または直後
+          if (pos > placeholderStart && pos <= placeholderEnd) shouldDeletePlaceholder = true
+        }
+      }
       if (!shouldDeletePlaceholder) return
-
       event.preventDefault()
       event.stopPropagation()
 
