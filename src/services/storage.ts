@@ -132,7 +132,7 @@ export class StorageService {
           defaultFrameworkId: frameworkId,
           initialized: false,
           language: 'ja',
-          version: '1.3.3' // TODO: manifest.jsonから動的に取得する
+          version: '1.3.4' // TODO: manifest.jsonから動的に取得する
         }
       };
       const defaultSnapshot: SnapshotData = {

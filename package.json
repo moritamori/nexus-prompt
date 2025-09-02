@@ -1,6 +1,6 @@
 {
   "name": "nexus-prompt",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "LLMプロンプト改善支援Chrome拡張",
   "type": "module",
   "scripts": {
