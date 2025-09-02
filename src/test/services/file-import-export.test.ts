@@ -294,4 +294,162 @@ describe('FileImportExportService', () => {
       expect(mockSaveAppData).not.toHaveBeenCalled();
     });
   });
+
+  describe('import (isDiff=true)', () => {
+    it('既存IDはスキップし、新規のみ追加する', async () => {
+      const service = new FileImportExportService();
+
+      // 既存アプリデータ（既に1件のプロンプトが存在する）
+      const existingPromptId = uuidv6();
+      const currentAppData = createMockAppData({
+        prompts: [createMockPrompt({ id: existingPromptId })],
+      });
+      mockGetAppData.mockResolvedValue(currentAppData);
+
+      // ZIP を作成（既存IDと新規IDの2件を含める）
+      const newPromptId = uuidv6();
+      const zip = new JSZip();
+      const buildFrontMatterMd = (body: string, data: Record<string, unknown>): string => {
+        const yaml = dumpYamlStable(data);
+        return `---\n${yaml}---\n${body ?? ''}`;
+      };
+      const makePrompt = (id: string, name: string) => ({
+        version: 2,
+        id,
+        name,
+        template: 'テンプレート',
+        inputs: [],
+      });
+      {
+        const { template, ...front } = makePrompt(existingPromptId, '既存のプロンプト');
+        zip.file(`prompt-${existingPromptId}.md`, buildFrontMatterMd(template as string, front));
+      }
+      {
+        const { template, ...front } = makePrompt(newPromptId, '新規のプロンプト');
+        zip.file(`prompt-${newPromptId}.md`, buildFrontMatterMd(template as string, front));
+      }
+
+      const arrayBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+      const initialCount = currentAppData.prompts.length;
+
+      // isDiff=true でインポート
+      await service.import(arrayBuffer, 'free', true);
+
+      expect(mockSaveAppData).toHaveBeenCalledTimes(1);
+      const saved = mockSaveAppData.mock.calls[0][0] as AppData;
+      // 既存 + 新規(1件)のみ（初期件数に対して +1）
+      expect(saved.prompts.length).toBe(initialCount + 1);
+      // 既存IDは重複していない
+      expect(saved.prompts.filter(p => p.id === existingPromptId).length).toBe(1);
+      // 新規IDが追加されている
+      expect(saved.prompts.some(p => p.id === newPromptId)).toBe(true);
+      // 新規IDの order は 2（既存1件の次）
+      expect(saved.prompts.find(p => p.id === newPromptId)?.order).toBe(2);
+    });
+
+    it('isDiff=true では framework のインポートを無視する', async () => {
+      const service = new FileImportExportService();
+
+      const existingFrameworkContent = '既存のフレームワーク内容';
+      const existingFramework = createMockFramework({ id: 'fw-existing', content: {
+        ...createMockFramework().content,
+        name: '既存のフレームワーク',
+        content: existingFrameworkContent,
+      } });
+      const currentAppData = createMockAppData({
+        frameworks: [existingFramework],
+        prompts: [createMockPrompt({ id: 'p-existing' })],
+      });
+      mockGetAppData.mockResolvedValue(currentAppData);
+
+      const zip = new JSZip();
+      const buildFrontMatterMd = (body: string, data: Record<string, unknown>): string => {
+        const yaml = dumpYamlStable(data);
+        return `---\n${yaml}---\n${body ?? ''}`;
+      };
+      // ZIP に framework ファイルを含める（isDiff=true では無視される想定）
+      const fwContent = 'content';
+      const fw = { id: 'fw-import', name: 'FW', version: 2, content: fwContent } as const;
+      const { content: fwBody, ...fwFront } = fw as any;
+      zip.file(`framework-${fw.id}.md`, buildFrontMatterMd(fwBody as string, fwFront));
+      // 追加の新規プロンプトも含める
+      const newPromptId = uuidv6();
+      const prompt = { version: 2, id: newPromptId, name: 'P', template: 'T', inputs: [] } as const;
+      const { template, ...front } = prompt as any;
+      zip.file(`prompt-${newPromptId}.md`, buildFrontMatterMd(template as string, front));
+
+      const arrayBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+      const initialCount = currentAppData.prompts.length;
+      await service.import(arrayBuffer, 'free', true);
+
+      expect(mockSaveAppData).toHaveBeenCalledTimes(1);
+      const saved = mockSaveAppData.mock.calls[0][0] as AppData;
+      // frameworks は変更なし（ZIP からは取り込まれない）
+      expect(saved.frameworks).toEqual(currentAppData.frameworks);
+      expect(saved.frameworks[0].content.content).toEqual(existingFrameworkContent);
+      expect(saved.frameworks[0].content.content).not.toEqual(fwContent);
+      // プロンプトは新規分だけ増える（初期件数に対して +1）
+      expect(saved.prompts.length).toBe(initialCount + 1);
+      expect(saved.prompts.some(p => p.id === newPromptId)).toBe(true);
+      expect(saved.prompts.find(p => p.id === newPromptId)?.order).toBe(2);
+    });
+
+    it('app-prompts.json が存在し、isDiff=true の場合に shared を反映して取り込む', async () => {
+      const service = new FileImportExportService();
+
+      // 既存データ（既存1件）
+      const existing = createMockPrompt({ id: uuidv6() });
+      const currentAppData = createMockAppData({ prompts: [existing] });
+      mockGetAppData.mockResolvedValue(currentAppData);
+
+      // 新規2件のプロンプト + app-prompts.json をZIPに含める
+      const newA = uuidv6();
+      const newB = uuidv6();
+      const zip = new JSZip();
+      const buildFrontMatterMd = (body: string, data: Record<string, unknown>): string => {
+        const yaml = dumpYamlStable(data);
+        return `---\n${yaml}---\n${body ?? ''}`;
+      };
+      const makePrompt = (id: string, name: string) => ({
+        version: 2,
+        id,
+        name,
+        template: 'テンプレート',
+        inputs: [],
+      });
+      {
+        const { template, ...front } = makePrompt(newA, '新規A');
+        zip.file(`prompt-${newA}.md`, buildFrontMatterMd(template as string, front));
+      }
+      {
+        const { template, ...front } = makePrompt(newB, '新規B');
+        zip.file(`prompt-${newB}.md`, buildFrontMatterMd(template as string, front));
+      }
+      // app-prompts.json を同梱（順序はバラバラだが、shared を参照できることを確認）
+      const meta = [
+        { id: newB, order: 5, shared: false },
+        { id: newA, order: 1, shared: true },
+      ];
+      zip.file(APP_PROMPTS_JSON_FILE_NAME, JSON.stringify(meta, null, 2));
+
+      const arrayBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+      const initialCount = currentAppData.prompts.length;
+      await service.import(arrayBuffer, 'free', true);
+
+      expect(mockSaveAppData).toHaveBeenCalledTimes(1);
+      const saved = mockSaveAppData.mock.calls[0][0] as AppData;
+      // 既存 + 新規2件
+      expect(saved.prompts.length).toBe(initialCount + 2);
+      // 各IDが存在し、shared が app-prompts.json に従う
+      const a = saved.prompts.find(p => p.id === newA)!;
+      const b = saved.prompts.find(p => p.id === newB)!;
+      expect(a).toBeTruthy();
+      expect(b).toBeTruthy();
+      expect(a.order).toBe(2);
+      expect(b.order).toBe(3);
+      expect(b.shared).toBe(false);
+      expect(a.shared).toBe(true);
+      expect(b.shared).toBe(false);
+    });
+  });
 }); 

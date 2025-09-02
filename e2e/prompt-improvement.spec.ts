@@ -61,7 +61,8 @@ test.describe('プロンプト適用（LLM連携）', () => {
     settings: {
       defaultFrameworkId: 'framework-1',
       version: '1.0.2',
-      language: 'ja'
+      language: 'ja',
+      initialized: true
     }
   };
   

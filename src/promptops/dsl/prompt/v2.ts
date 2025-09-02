@@ -45,7 +45,31 @@ export class PromptDslV2 {
     } else if (version !== PromptDslV2.Version) {
       throw new Error(`Unsupported prompt version: ${version}`);
     }
-    return PromptDslV2.Schema.parse(obj);
+    const parsed = PromptDslV2.Schema.parse(obj);
+
+    // inputs 内のキー順を schema 定義順に固定
+    const inputKeyOrder = Object.keys(PromptInputSchema.shape);
+    const orderInput = (item: Record<string, unknown>) => {
+      const entries = Object.entries(item);
+      entries.sort(([a], [b]) => {
+        const ai = inputKeyOrder.indexOf(a);
+        const bi = inputKeyOrder.indexOf(b);
+        const av = ai === -1 ? Number.POSITIVE_INFINITY : ai;
+        const bv = bi === -1 ? Number.POSITIVE_INFINITY : bi;
+        if (av !== bv) return av - bv;
+        return a.localeCompare(b);
+      });
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of entries) out[k] = v;
+      return out;
+    };
+
+    const inputsOrdered = (parsed.inputs ?? []).map((i) =>
+      (i && typeof i === 'object' && !Array.isArray(i))
+        ? (orderInput(i as Record<string, unknown>) as any)
+        : i
+    );
+    return { ...parsed, inputs: inputsOrdered } as any;
   }
 }
 

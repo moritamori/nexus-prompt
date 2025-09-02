@@ -67,6 +67,23 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
+// キーボードショートカットのコマンドを処理
+chrome.commands.onCommand.addListener(async (command, tab) => {
+  if (command === 'open-side-panel') {
+    // タブが渡されない場合は、現在のアクティブなタブを取得
+    if (!tab) {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      tab = tabs[0];
+    }
+    // サイドパネルを開く
+    if (tab?.windowId) {
+      chrome.sidePanel.open({
+        windowId: tab.windowId
+      });
+    }
+  }
+});
+
 // API呼び出しを処理するメッセージリスナー
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'IMPROVE_PROMPT') {

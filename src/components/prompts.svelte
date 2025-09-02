@@ -6,12 +6,16 @@
   import EditPrompt from './edit-prompt/detail.svelte';
   import { useForwardToDetail } from '../actions/navigation';
   import { movePrompt } from '../actions/prompts';
+  import { FileImportExportService } from '../services/file-import-export';
 
   // Local state
   let view = $state<'list' | 'edit'>('list');
   let editingPromptId = $state<string | null>(null);
   let deletingIds = $state<Set<string>>(new Set());
   let handledSidepanelInit = $state(false);
+  let selectedIds = $state<Set<string>>(new Set());
+  let fileInputEl = $state<HTMLInputElement | null>(null);
+  const importExportService = new FileImportExportService();
   
   // Event handler
   let { promptSelectionReset } = $props();
@@ -121,6 +125,63 @@
     }
   }
 
+  function toggleSelect(id: string, checked: boolean): void {
+    if (checked) {
+      selectedIds.add(id);
+    } else {
+      selectedIds.delete(id);
+    }
+    // trigger reactivity
+    selectedIds = new Set(selectedIds);
+  }
+
+  async function handleDiffExport(): Promise<void> {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      showToast('エクスポート対象のプロンプトを選択してください。', 'info');
+      return;
+    }
+    try {
+      const zipBytes = await importExportService.export(ids);
+      // ZIPダウンロードの実行（ArrayBufferに切り出して型互換にする）
+      const arrayBuffer = zipBytes.buffer.slice(
+        zipBytes.byteOffset,
+        zipBytes.byteOffset + zipBytes.byteLength
+      ) as ArrayBuffer;
+      const blob = new Blob([arrayBuffer], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'prompts-diff.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('差分エクスポートを完了しました。', 'success');
+    } catch (e) {
+      console.error('差分エクスポートに失敗:', e);
+      showToast('差分エクスポートに失敗しました。', 'error');
+    }
+  }
+
+  async function handleDiffImportFromFile(file: File): Promise<void> {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      await importExportService.import(arrayBuffer, $entitlements.plan, true);
+      showToast('差分インポートを完了しました。', 'success');
+      // インポート後は選択をクリア
+      selectedIds.clear();
+      selectedIds = new Set(selectedIds);
+    } catch (e) {
+      console.error('差分インポートに失敗:', e);
+      showToast('差分インポートに失敗しました。', 'error');
+    }
+  }
+
+  function triggerDiffImport(): void {
+    fileInputEl?.click();
+  }
+
   function backToList(): void {
     view = 'list';
     editingPromptId = null;
@@ -136,13 +197,25 @@
     <div in:fade={{ duration: 200 }}>
       <div class="prompt-header">
         <button id="newPromptButton" class="primary-button" data-testid="new-prompt-button" onclick={openNewEditorInSidePanel}>新規作成</button>
+        <div class="diff-actions">
+          <button class="secondary-button" onclick={triggerDiffImport}>差分インポート</button>
+          <button class="secondary-button" onclick={handleDiffExport} disabled={selectedIds.size === 0}>差分エクスポート</button>
+          <input bind:this={fileInputEl} type="file" accept=".zip" class="hidden" onchange={(e) => {
+            const files = (e.target as HTMLInputElement)?.files;
+            if (files && files[0]) handleDiffImportFromFile(files[0]);
+            if (fileInputEl) fileInputEl.value = '';
+          }} />
+        </div>
       </div>
       <div id="promptList" data-testid="prompt-list" class="prompt-list {$viewContext === 'popup' ? 'popup-view' : ''}">
         {#each promptsOrdered as prompt (prompt.id)}
         <div class="prompt-item js-prompt-item" data-testid="prompt-item" in:fly={{ y: 20, duration: 250 }} animate:flip>
           <div class="prompt-info">
-            <h4>{prompt.content.name}</h4>
-            <p>{prompt.content.template.substring(0, 45)}...</p>
+            <h4>
+              <input id={`sel-${prompt.id}`} type="checkbox" class="mr-1" checked={selectedIds.has(prompt.id)} onchange={(e) => toggleSelect(prompt.id, (e.target as HTMLInputElement).checked)} />
+              <label for={`sel-${prompt.id}`} class="cursor-pointer select-none">{prompt.content.name}</label>
+            </h4>
+            <p>{prompt.content.template.substring(0, 43)}...</p>
           </div>
           <div class="prompt-actions">
             <button class="sort-button" aria-label="上へ" title="上へ" onclick={() => movePrompt(prompt.id, 'up')} disabled={promptsOrdered[0]?.id === prompt.id}>↑</button>
@@ -178,8 +251,10 @@
   }
 
   .prompt-header {
-    @apply mb-3;
+    @apply mb-3 flex items-center gap-3;
   }
+  .diff-actions { @apply inline-flex gap-2; }
+  .secondary-button { @apply px-3 py-2 text-sm bg-white text-gray-800 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed; }
 
   .prompt-list {
     @apply flex flex-col gap-2.5 max-h-[500px] overflow-y-auto;

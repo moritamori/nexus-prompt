@@ -21,9 +21,10 @@ export class FileImportExportService {
    * providers と settings は現状含めません（機微情報保護）。
    * @returns {Promise<Uint8Array>} ZIPバイト列
    */
-  async export(): Promise<Uint8Array> {
+  async export(ids: Array<string> = []): Promise<Uint8Array> {
     const appData = await this.storage.getAppData();
 
+    const isDiff = ids.length > 0;
     const zip = new JSZip();
 
     const buildFrontMatterMd = (body: string, data: Record<string, unknown>): string => {
@@ -31,21 +32,37 @@ export class FileImportExportService {
       return `---\n${yaml}---\n${body ?? ''}`;
     };
 
-    for (const fw of appData.frameworks) {
-      const { content, ...frontMatter } = fw.content;
-      const fileName = `framework-${fw.id}.md`;
-      const markdown = buildFrontMatterMd(content ?? '', frontMatter);
-      zip.file(fileName, markdown);
+    if (!isDiff) {
+      for (const fw of appData.frameworks) {
+        const { content, ...frontMatter } = fw.content;
+        const fileName = `framework-${fw.id}.md`;
+        const markdown = buildFrontMatterMd(content ?? '', frontMatter);
+        zip.file(fileName, markdown);
+      }
     }
 
     for (const p of appData.prompts) {
+      if (isDiff && !ids.includes(p.id)) {
+        continue;
+      }
       const { template, ...frontMatter } = p.content;
       const fileName = `${p.id}.md`;
       const markdown = buildFrontMatterMd(template ?? '', frontMatter);
       zip.file(fileName, markdown);
     }
 
-    const promptsMeta = appData.prompts.map((p) => ({ id: p.id, order: p.order, shared: p.shared }));
+    // PromptMeta の生成方法を isDiff に応じて切り替える
+    // - isDiff=true の場合: p.order の昇順に並べ、1,2,3... と連番で採番
+    // - isDiff=false の場合: 既存の p.order をそのまま使用
+    const promptsMeta = (() => {
+      if (isDiff) {
+        const selected = appData.prompts
+          .filter((p) => ids.includes(p.id))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        return selected.map((p, idx) => ({ id: p.id, order: idx + 1, shared: p.shared }));
+      }
+      return appData.prompts.map((p) => ({ id: p.id, order: p.order, shared: p.shared }));
+    })();
     zip.file(APP_PROMPTS_JSON_FILE_NAME, JSON.stringify(promptsMeta, null, 2));
 
     const zipData = await zip.generateAsync({ type: 'uint8array' });
@@ -58,7 +75,7 @@ export class FileImportExportService {
    *   - `framework-*.md` … Framework（Front-matter: DSL、本文: content）
    *   - `*.md`（ただし `framework-*.md` を除く）… Prompt（Front-matter: DSL、本文: template）
    */
-  async import(input: ArrayBuffer | Uint8Array, plan: Plan): Promise<void> {
+  async import(input: ArrayBuffer | Uint8Array, plan: Plan, isDiff: boolean = false): Promise<void> {
     const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
     let zip: JSZip;
     try {
@@ -66,12 +83,14 @@ export class FileImportExportService {
     } catch (e) {
       throw new Error('インポートファイルの形式が正しくありません。');
     }
-    await this.importFromZip(zip, plan);
+    await this.importFromZip(zip, plan, isDiff);
   }
 
-  async importFromZip(zip: JSZip, plan: Plan): Promise<void> {
+  async importFromZip(zip: JSZip, plan: Plan, isDiff: boolean = false): Promise<void> {
     const frameworks: Framework[] = [];
-    const prompts: Prompt[] = [];
+
+    const currentAppData = await this.storage.getAppData();
+    const prompts: Prompt[] = isDiff ? currentAppData.prompts : [];
 
     const nowIso = new Date().toISOString();
 
@@ -80,7 +99,7 @@ export class FileImportExportService {
 
     // ルート直下の framework-*.md を処理（ファイル名昇順）
     let defaultFrameworkId = '';
-    {
+    if (!isDiff) {
       const fwFiles = Object.keys(zip.files)
         .filter((p) => {
           const b = baseName(p);
@@ -121,7 +140,6 @@ export class FileImportExportService {
     }
 
     // デフォルトフレームワークが指定されていない場合は、現在のデフォルトフレームワークを使用
-    const currentAppData = await this.storage.getAppData();
     if (defaultFrameworkId === '') {
       defaultFrameworkId = currentAppData.settings.defaultFrameworkId;
     }
@@ -167,6 +185,12 @@ export class FileImportExportService {
             continue;
           }
           seenPromptIds.add(promptId);
+
+          // isDiff=true の場合、既存の prompts に同一IDがあるものはスキップ
+          if (isDiff && prompts.some((p) => p.id === promptId)) {
+            continue;
+          }
+
           importedPromptEntries.push({ id: promptId, content: promptContent });
         } catch (e) {
           console.warn(`Skipping invalid prompt file ${path}:`, e);
@@ -178,13 +202,29 @@ export class FileImportExportService {
       if (metaFile) {
         try {
           const text = await metaFile.async('string');
-          const metaArr = JSON.parse(text) as Array<{ id: string; order?: number; shared?: boolean }>;
-          const metaMap = new Map<string, { order?: number; shared?: boolean }>();
-          for (const m of Array.isArray(metaArr) ? metaArr : []) {
-            if (m && typeof m.id === 'string') metaMap.set(m.id, { order: m.order, shared: m.shared });
+          const metaArr = JSON.parse(text) as Array<{ id: string; order: number; shared: boolean }>;
+          const metaMap = new Map<string, { order: number; shared: boolean }>();
+          const list = Array.isArray(metaArr) ? metaArr : [];
+          if (isDiff) {
+            // isDiff=true の場合: metaArr.order で並び替えた上で 1,2,3... と連番を採番
+            const sorted = [...list].sort((a, b) => (a?.order ?? 0) - (b?.order ?? 0));
+            let idx = 0;
+            for (const m of sorted) {
+              metaMap.set(m.id, { order: ++idx, shared: !!m.shared });
+            }
+          } else {
+            // isDiff=false の場合: metaArr.order をそのまま使用
+            for (const m of list) {
+              metaMap.set(m.id, { order: m.order, shared: !!m.shared });
+            }
           }
 
-          // JSON に存在するものの最大 order（今回インポート対象に限る）を求める
+          // 既存側の最大 order（isDiff=true のときのみオフセットとして利用）
+          const baseOrderOffset = isDiff
+            ? prompts.reduce((max, p) => Math.max(max, (p.order ?? 0)), 0)
+            : 0;
+
+          // metaMap に存在するインポート対象の最大 order を求める
           let maxOrderInMeta = 0;
           for (const { id } of importedPromptEntries) {
             const meta = metaMap.get(id);
@@ -197,10 +237,9 @@ export class FileImportExportService {
           let nextOrder = maxOrderInMeta;
           for (const entry of importedPromptEntries) {
             const meta = metaMap.get(entry.id);
-            const order = meta && typeof meta.order === 'number' && Number.isFinite(meta.order)
-              ? meta.order
-              : (nextOrder += 1);
-            const shared = meta && typeof meta.shared === 'boolean' ? meta.shared : true;
+            const withinDiffOrder = meta ? meta.order : (nextOrder += 1);
+            const order = isDiff ? baseOrderOffset + withinDiffOrder : withinDiffOrder;
+            const shared = meta ? meta.shared : true;
             prompts.push({
               id: entry.id,
               content: entry.content,
@@ -213,7 +252,7 @@ export class FileImportExportService {
         } catch (e) {
           console.warn('Failed to parse app-prompts.json. Falling back to filename order.', e);
           // JSON が不正な場合は従来のファイル名ベースの順で order を付与
-          let idx = 0;
+          let idx = prompts.length;
           for (const entry of importedPromptEntries) {
             prompts.push({
               id: entry.id,
@@ -227,7 +266,7 @@ export class FileImportExportService {
         }
       } else {
         // app-prompts.json が存在しない場合は、ファイル名ベースの順で order を付与
-        let idx = 0;
+        let idx = prompts.length;
         for (const entry of importedPromptEntries) {
           prompts.push({
             id: entry.id,

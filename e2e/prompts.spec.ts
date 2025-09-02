@@ -2,6 +2,8 @@ import { AppData, Prompt } from '../src/types';
 import { test, expect } from './fixtures';
 import { STORAGE_KEY } from '../src/services/storage';
 import { v6 as uuidv6 } from 'uuid';
+import JSZip from 'jszip';
+import { promises as fs } from 'fs';
 
 test.describe('プロンプトテンプレート管理テスト', () => {
   const prompt1Id = uuidv6().toString();
@@ -423,5 +425,87 @@ test.describe('プロンプトテンプレート管理テスト', () => {
     }, STORAGE_KEY);
     const prompts = storedData[STORAGE_KEY].prompts;
     expect(prompts.length).toBe(5);
+  });
+
+  test('差分エクスポート: 選択したプロンプトのみをZIPに含める', async ({ context, extensionUrl }) => {
+    const page = await context.newPage();
+    await page.goto(extensionUrl('popup.html'));
+    await page.waitForSelector('[data-testid="nexus-prompt"]');
+    await page.click('button:has-text("LLMプロンプト管理")');
+
+    // 2件選択して差分エクスポート
+    await page.click(`label:has-text("既存のプロンプト1(編集)")`);
+    await page.click(`label:has-text("既存のプロンプト3(入力バリデーションエラー)")`);
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('button:has-text("差分エクスポート")'),
+    ]);
+
+    const zipPath = await download.path();
+    expect(zipPath).toBeTruthy();
+    const bytes = await fs.readFile(zipPath!);
+    const zip = await JSZip.loadAsync(bytes);
+
+    // 選択した2件のみ含まれていること
+    const fileNames = Object.keys(zip.files).filter((p) => p.endsWith('.md'));
+    const has1 = fileNames.some((n) => n.includes(prompt1Id));
+    const has3 = fileNames.some((n) => n.includes(prompt3Id));
+    const has2 = fileNames.some((n) => n.includes(prompt2Id));
+    expect(has1).toBe(true);
+    expect(has3).toBe(true);
+    expect(has2).toBe(false);
+    // メタファイルが含まれていること
+    expect(zip.file('app-prompts.json')).toBeTruthy();
+  });
+
+  test('差分インポート: 既存IDはスキップし新規のみ追加', async ({ context, extensionUrl, serviceWorker }) => {
+    const page = await context.newPage();
+    await page.goto(extensionUrl('popup.html'));
+    await page.waitForSelector('[data-testid="nexus-prompt"]');
+    await page.click('button:has-text("LLMプロンプト管理")');
+
+    // 差分ZIPを作成（既存ID1件 + 新規ID1件）
+    const newId = uuidv6().toString();
+    const zip = new JSZip();
+    const buildFrontMatterMd = (body: string, data: Record<string, unknown>) => {
+      const lines = [
+        '---',
+        `version: 2`,
+        `id: ${data.id}`,
+        `name: ${data.name}`,
+        `inputs: []`,
+        '---',
+        body ?? '',
+      ];
+      return lines.join('\n');
+    };
+    // 既存
+    zip.file(`prompt-${prompt1Id}.md`, buildFrontMatterMd('テンプレート1', { id: prompt1Id, name: '既存1' }));
+    // 新規
+    zip.file(`prompt-${newId}.md`, buildFrontMatterMd('テンプレート2', { id: newId, name: '新規' }));
+
+    const zipBytes = await zip.generateAsync({ type: 'uint8array' });
+
+    // 差分インポート（ファイルチューザーを処理）
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.click('button:has-text("差分インポート")'),
+    ]);
+    await chooser.setFiles({ name: 'diff.zip', mimeType: 'application/zip', buffer: Buffer.from(zipBytes) });
+
+    // トースト確認
+    await expect(page.locator('[data-testid="message-area"]')).toContainText('差分インポートを完了しました。');
+
+    // ストレージ検証（新規のみ増えている）
+    const storedData = await serviceWorker.evaluate(async (key: string) => {
+      return await chrome.storage.local.get(key);
+    }, STORAGE_KEY);
+    const prompts = storedData[STORAGE_KEY].prompts as Prompt[];
+    // 初期 5 + 新規 1 = 6
+    expect(prompts.length).toBe(6);
+    expect(prompts.some((p: Prompt) => p.id === newId)).toBe(true);
+    // 既存IDは重複なし
+    expect(prompts.filter((p: Prompt) => p.id === prompt1Id).length).toBe(1);
   });
 }); 

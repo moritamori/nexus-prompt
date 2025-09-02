@@ -51,7 +51,8 @@ test.describe('フレームワーク管理テスト', () => {
     settings: {
       defaultFrameworkId: 'test-framework-id',
       version: '1.0.0',
-      language: 'ja'
+      language: 'ja',
+      initialized: true
     }
   };
 
