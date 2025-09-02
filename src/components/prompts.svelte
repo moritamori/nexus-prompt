@@ -172,9 +172,10 @@
       // インポート後は選択をクリア
       selectedIds.clear();
       selectedIds = new Set(selectedIds);
-    } catch (e) {
-      console.error('差分インポートに失敗:', e);
-      showToast('差分インポートに失敗しました。', 'error');
+    } catch (error) {
+      console.error('差分インポートに失敗:', error);
+      const rawMessage = error instanceof Error ? error.message : 'インポートに失敗しました';
+      showToast(rawMessage, 'error');
     }
   }
 

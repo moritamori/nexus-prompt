@@ -161,9 +161,6 @@ export class FileImportExportService {
         })
         .sort((a, b) => b.localeCompare(a, 'en', { numeric: true, sensitivity: 'base' }));
 
-      if (plan === 'free' && prFiles.length > 20) {
-        throw new Error('無料プランでは20個より多くプロンプトをインポートできません。');
-      }
 
       // まずは全ての Prompt ファイルを読み取り、重複を排除した上で内容を確定
       const seenPromptIds = new Set<string>();
@@ -278,6 +275,10 @@ export class FileImportExportService {
           });
         }
       }
+    }
+
+    if (plan === 'free' && prompts.length > 20) {
+      throw new Error('無料プランでは20個より多くプロンプトをインポートできません。');
     }
 
     const newAppData: AppData = {
