@@ -1,4 +1,4 @@
-This repository has moved https://github.com/nexus-prompt/nexus-prompt
+This repository has moved from https://github.com/nexus-prompt/nexus-prompt
 
 # Nexus Prompt - Chrome拡張機能
 
