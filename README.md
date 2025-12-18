@@ -1,3 +1,5 @@
+This repository has moved from https://github.com/nexus-prompt/nexus-prompt
+
 # Nexus Prompt - Chrome拡張機能
 
 LLMプロンプトの作成・改善を支援する Chrome 拡張機能です。
